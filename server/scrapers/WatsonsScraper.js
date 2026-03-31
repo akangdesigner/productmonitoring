@@ -66,4 +66,130 @@ class WatsonsScraper extends BaseScraper {
   }
 }
 
+  // ── 分類頁批量爬取（第 0～N 頁）─────────────────────────
+  async scrapeCategory(baseUrl, totalPages = 9) {
+    const allProducts = [];
+    await this.launch();
+
+    try {
+      for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+        const url = `${baseUrl}&currentPage=${pageNum}`;
+        logger.info(`[屈臣氏] 分類頁 ${pageNum + 1}/${totalPages}: ${url}`);
+
+        const products = await this.withRetry(async () => {
+          const page = await this.newPage();
+          try {
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+            await this.randomDelay(1000, 2500);
+
+            // 等待商品卡片載入
+            await page.waitForSelector(
+              '.product-list-item, .product-tile, [class*="productItem"], [class*="product-item"], .yCmsContentSlot li',
+              { timeout: 15000 }
+            ).catch(() => null);
+
+            return await page.evaluate(() => {
+              const results = [];
+
+              // 嘗試多種可能的商品卡片選擇器
+              const cardSelectors = [
+                '.product-list-item',
+                '.product-tile',
+                '[class*="productListItem"]',
+                '[class*="product-list"] li',
+                '.product-grid-item',
+                'li[class*="item"]',
+              ];
+
+              let cards = [];
+              for (const sel of cardSelectors) {
+                cards = document.querySelectorAll(sel);
+                if (cards.length > 0) break;
+              }
+
+              cards.forEach(card => {
+                // 商品名稱
+                const nameSelectors = [
+                  '[class*="productName"]', '[class*="product-name"]',
+                  '[class*="itemName"]',    'h3', 'h2',
+                  '[class*="name"]',
+                ];
+                let name = null;
+                for (const sel of nameSelectors) {
+                  const el = card.querySelector(sel);
+                  if (el?.textContent?.trim()) { name = el.textContent.trim(); break; }
+                }
+
+                // 價格
+                const priceSelectors = [
+                  '[class*="priceValue"]', '[class*="price-value"]',
+                  '[class*="salePrice"]',  '[class*="currentPrice"]',
+                  '[class*="productPrice"]','[class*="price"]',
+                ];
+                let priceStr = null;
+                for (const sel of priceSelectors) {
+                  const el = card.querySelector(sel);
+                  if (el?.textContent?.match(/\d/)) { priceStr = el.textContent.trim(); break; }
+                }
+
+                // 原價（劃線價）
+                const origSelectors = [
+                  '[class*="originalPrice"]', '[class*="original-price"]',
+                  '[class*="wasPrice"]',       'del', 's',
+                ];
+                let origStr = null;
+                for (const sel of origSelectors) {
+                  const el = card.querySelector(sel);
+                  if (el?.textContent?.match(/\d/)) { origStr = el.textContent.trim(); break; }
+                }
+
+                // 商品頁連結
+                const linkEl = card.querySelector('a[href*="/p/"], a[href*="product"], a[href]');
+                const href = linkEl?.getAttribute('href') || null;
+                const productUrl = href
+                  ? (href.startsWith('http') ? href : `https://www.watsons.com.tw${href}`)
+                  : null;
+
+                // 圖片
+                const imgEl = card.querySelector('img');
+                const image = imgEl?.src || imgEl?.dataset?.src || null;
+
+                if (name && priceStr) {
+                  results.push({ name, priceStr, origStr, productUrl, image });
+                }
+              });
+
+              return results;
+            });
+          } finally {
+            await page.close();
+          }
+        });
+
+        // 解析價格並整理資料
+        const parsed = products.map(p => ({
+          name:          p.name,
+          price:         this.parsePrice(p.priceStr),
+          originalPrice: this.parsePrice(p.origStr),
+          productUrl:    p.productUrl,
+          image:         p.image,
+          platform:      'watsons',
+          scrapedAt:     new Date().toISOString(),
+        })).filter(p => p.price > 0);
+
+        logger.info(`[屈臣氏] 第 ${pageNum + 1} 頁抓到 ${parsed.length} 筆`);
+        allProducts.push(...parsed);
+
+        // 避免被封鎖：每頁之間隨機等待
+        if (pageNum < totalPages - 1) await this.randomDelay(1500, 3000);
+      }
+    } finally {
+      await this.close();
+    }
+
+    logger.info(`[屈臣氏] 分類爬取完成，共 ${allProducts.length} 筆商品`);
+    return allProducts;
+  }
+}
+
 module.exports = WatsonsScraper;

@@ -31,11 +31,15 @@ class AlertService {
 
     logger.info(`[警示] 建立: ${title}`);
 
-    // 降價時推播 LINE
+    // 降價時推播 LINE Flex Message
     if (type === 'price_drop') {
-      await LineService.sendAlert(message).catch(err =>
-        logger.warn(`LINE 推播失敗: ${err.message}`)
-      );
+      await LineService.sendPriceDropAlert({
+        productName: product.name,
+        brand:       product.brand || '',
+        platform,
+        oldPrice,
+        newPrice,
+      }).catch(err => logger.warn(`LINE 推播失敗: ${err.message}`));
       db.prepare('UPDATE alerts SET line_sent = 1 WHERE id = ?').run(alertId);
     }
   }
@@ -58,9 +62,13 @@ class AlertService {
 
     logger.info(`[警示] 建立: ${title}`);
 
-    await LineService.sendAlert(message).catch(err =>
-      logger.warn(`LINE 推播失敗: ${err.message}`)
-    );
+    await LineService.sendGiftAlert({
+      productName: product.name,
+      brand:       product.brand || '',
+      platform,
+      giftDescription: newGift || oldGift,
+      isAdded: type === 'gift_added',
+    }).catch(err => logger.warn(`LINE 推播失敗: ${err.message}`));
   }
 
   _platformLabel(platform) {

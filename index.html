@@ -599,9 +599,78 @@
       .mid-grid { grid-template-columns: 1fr; }
       .settings-grid { grid-template-columns: 1fr 1fr; }
     }
+
+    /* ─── Toast Notifications ─── */
+    #toast-container {
+      position: fixed; bottom: 28px; right: 28px;
+      display: flex; flex-direction: column; gap: 10px;
+      z-index: 9999; pointer-events: none;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      backdrop-filter: blur(16px);
+      border: 1px solid;
+      pointer-events: auto;
+      animation: toastIn 0.3s cubic-bezier(.2,.8,.4,1) both;
+      max-width: 360px;
+    }
+    .toast.success { background:#0d1f14cc; border-color:#4ade8040; color:#4ade80; }
+    .toast.error   { background:#1f0d10cc; border-color:#ff4d6d40; color:#ff4d6d; }
+    .toast.info    { background:#10101fcc; border-color:#9b6dca40; color:#c084fc; }
+    @keyframes toastIn {
+      from { opacity:0; transform: translateY(12px) scale(0.95); }
+      to   { opacity:1; transform: translateY(0)    scale(1); }
+    }
+    @keyframes toastOut {
+      to { opacity:0; transform: translateY(8px) scale(0.95); }
+    }
+    .toast.removing { animation: toastOut 0.25s ease forwards; }
+
+    /* ─── Offline Banner ─── */
+    #offline-banner {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9000;
+      background: linear-gradient(90deg, #1a0808, #2a0d0d);
+      border-bottom: 1px solid #ff4d6d40;
+      padding: 8px 24px;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--red); text-align: center; letter-spacing: 0.05em;
+    }
+    #offline-banner.visible { display: block; }
+
+    /* ─── LINE Status Badge ─── */
+    .line-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+    }
+    .line-status.connected    { background:#06c75515; border:1px solid #06c75540; color:#06c755; }
+    .line-status.disconnected { background:#ff4d6d15; border:1px solid #ff4d6d40; color:#ff4d6d; }
+    .line-status .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+    .line-status.connected .dot    { background:#06c755; box-shadow:0 0 5px #06c755; }
+    .line-status.disconnected .dot { background:#ff4d6d; }
+
+    /* ─── Button Loading State ─── */
+    .btn.loading { opacity: 0.6; pointer-events: none; cursor: not-allowed; }
+    .btn.loading::after {
+      content: '';
+      display: inline-block; width: 10px; height: 10px;
+      border: 2px solid currentColor; border-top-color: transparent;
+      border-radius: 50%; margin-left: 6px;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
+  <div id="offline-banner">⚠ 無法連線後端伺服器（localhost:3000）— 目前顯示示範資料，請執行 npm run dev 啟動後端</div>
+  <div id="toast-container"></div>
+
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>
   <div class="orb orb-3"></div>
@@ -786,58 +855,79 @@
       <!-- LINE Settings -->
       <div class="settings-card">
         <div class="section-header" style="margin-bottom:0">
-          <div class="section-title">LINE 通知設定</div>
-          <button class="btn btn-ghost" style="font-size:11px; padding:5px 10px" onclick="testLine()">📩 發送測試訊息</button>
+          <div class="section-title">
+            LINE 通知設定
+            <span class="line-status disconnected" id="lineStatusBadge">
+              <span class="dot"></span><span id="lineStatusText">未連線</span>
+            </span>
+          </div>
+          <button class="btn btn-ghost" id="btnTestLine" style="font-size:11px; padding:5px 10px" onclick="testLine()">📩 發送測試訊息</button>
         </div>
 
         <div class="settings-grid">
           <div class="form-group">
             <label class="form-label">Channel Access Token</label>
-            <input type="password" class="form-input" placeholder="輸入 LINE Channel Token…" id="lineToken">
+            <input type="password" class="form-input" placeholder="輸入 LINE Channel Token…" id="lineToken"
+              oninput="document.getElementById('lineStatusBadge').className='line-status disconnected'; document.getElementById('lineStatusText').textContent='未儲存'">
           </div>
           <div class="form-group">
             <label class="form-label">Channel Secret</label>
-            <input type="password" class="form-input" placeholder="輸入 Channel Secret…" id="lineSecret">
+            <input type="password" class="form-input" placeholder="輸入 Channel Secret…" id="lineSecret"
+              oninput="document.getElementById('lineStatusBadge').className='line-status disconnected'; document.getElementById('lineStatusText').textContent='未儲存'">
           </div>
           <div class="form-group">
             <label class="form-label">推播目標 User ID</label>
             <input type="text" class="form-input" placeholder="U1234abcd…" id="lineUserId">
+            <span style="font-size:10px; color:var(--text-muted); margin-top:2px;">
+              取得方式：加入 LINE Bot 後傳送任意訊息，後端 Webhook 會記錄 User ID
+            </span>
           </div>
 
           <div style="border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
             <div class="toggle-row">
               <span class="toggle-label">降價通知</span>
-              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div class="toggle on" id="togglePriceDrop" onclick="this.classList.toggle('on')"></div>
             </div>
             <div class="toggle-row">
               <span class="toggle-label">贈品異動通知</span>
-              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div class="toggle on" id="toggleGiftChange" onclick="this.classList.toggle('on')"></div>
             </div>
             <div class="toggle-row">
               <span class="toggle-label">每日早報（09:00）</span>
-              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              <div class="toggle on" id="toggleDailyReport" onclick="this.classList.toggle('on')"></div>
             </div>
           </div>
 
           <div class="form-group">
             <label class="form-label">降價觸發門檻（%）</label>
             <input type="number" class="form-input" value="5" min="1" max="50" id="threshold">
+            <span style="font-size:10px; color:var(--text-muted); margin-top:2px;">
+              對手降價超過此百分比才發出 LINE 警報
+            </span>
           </div>
 
           <div class="form-group">
-            <label class="form-label">LINE 通知預覽</label>
-            <div style="background:#06c75510; border:1px solid #06c75530; border-radius:8px; padding:10px; font-size:11px; line-height:1.7; color:var(--text-secondary);">
-              🚨 <strong style="color:var(--text-primary)">警報！</strong><br>
-              MOMO・SK-II 神仙水 230ml<br>
-              降價 <span style="color:var(--red)">12%</span>（$3,480 → $3,060）<br>
-              <span style="color:var(--text-muted)">建議跟進調整定價策略</span>
+            <label class="form-label">LINE Flex Message 預覽</label>
+            <div style="background:#06c75510; border:1px solid #06c75530; border-radius:8px; overflow:hidden;">
+              <div style="background:#ff4d6d; padding:8px 12px;">
+                <span style="font-size:12px; font-weight:700; color:#fff;">🚨 降價警報</span>
+              </div>
+              <div style="padding:10px 12px; font-size:11px; line-height:1.8; color:var(--text-secondary);">
+                <strong style="color:var(--text-primary); font-size:13px;">SK-II 神仙水 230ml</strong><br>
+                <span style="color:var(--momo)">MOMO 購物網</span><br>
+                <hr style="border-color:var(--border); margin:6px 0">
+                原價 <span style="text-decoration:line-through; color:var(--text-muted)">NT$3,960</span><br>
+                現價 <strong style="color:var(--red); font-size:14px;">NT$3,480</strong><br>
+                <span style="background:var(--red-dim); color:var(--red); padding:2px 8px; border-radius:4px; font-size:10px;">↓ 降價 12.1% | 省 NT$480</span>
+              </div>
+              <div style="padding:6px 12px 10px; font-size:10px; color:var(--text-muted);">建議跟進調整定價策略</div>
             </div>
           </div>
         </div>
 
         <div class="settings-actions">
-          <button class="btn btn-ghost">取消</button>
-          <button class="btn btn-primary" onclick="saveSettings()">儲存設定</button>
+          <button class="btn btn-ghost" onclick="loadLineSettings()">重置</button>
+          <button class="btn btn-primary" id="btnSaveSettings" onclick="saveSettings()">儲存設定</button>
         </div>
       </div>
 
@@ -845,46 +935,50 @@
   </div>
 
   <script>
-  // ── Mock Data ──────────────────────────────────────────
-  const PRODUCTS = [
+  // ── 後端 API 位址（可依部署環境修改） ─────────────────
+  const API_BASE = 'http://localhost:3000';
+  let isOnline = false;
+
+  // ── Mock Data（後端離線時的 Fallback） ────────────────
+  const MOCK_PRODUCTS = [
     {
       id: 1, name: 'SK-II 神仙水 230ml', brand: 'SK-II', category: 'skincare', emoji: '✨',
-      watsons:  { price: 3960, prev: 3960, gift: null },
-      cosmed:   { price: 3960, prev: 3960, gift: '贈 7ml 體驗版' },
-      momo:     { price: 3480, prev: 3960, gift: null },
+      watsons:  { price: 3960, prevPrice: 3960, gift: null },
+      cosmed:   { price: 3960, prevPrice: 3960, gift: '贈 7ml 體驗版' },
+      momo:     { price: 3480, prevPrice: 3960, gift: null },
     },
     {
       id: 2, name: '蘭蔻 小黑瓶精華 50ml', brand: 'Lancôme', category: 'skincare', emoji: '🖤',
-      watsons:  { price: 3200, prev: 3200, gift: '贈眼霜 5ml' },
-      cosmed:   { price: 3200, prev: 3600, gift: null },
-      momo:     { price: 2980, prev: 3200, gift: null },
+      watsons:  { price: 3200, prevPrice: 3200, gift: '贈眼霜 5ml' },
+      cosmed:   { price: 3200, prevPrice: 3600, gift: null },
+      momo:     { price: 2980, prevPrice: 3200, gift: null },
     },
     {
       id: 3, name: 'YSL 奢華唇膏 #1966', brand: 'Yves Saint Laurent', category: 'makeup', emoji: '💄',
-      watsons:  { price: 1350, prev: 1350, gift: null },
-      cosmed:   { price: 1350, prev: 1500, gift: '贈化妝包' },
-      momo:     { price: 1280, prev: 1350, gift: null },
+      watsons:  { price: 1350, prevPrice: 1350, gift: null },
+      cosmed:   { price: 1350, prevPrice: 1500, gift: '贈化妝包' },
+      momo:     { price: 1280, prevPrice: 1350, gift: null },
     },
     {
       id: 4, name: 'MAC 子彈唇膏 Ruby Woo', brand: 'M·A·C', category: 'makeup', emoji: '💋',
-      watsons:  { price: 880, prev: 980, gift: null },
-      cosmed:   { price: 900, prev: 900, gift: null },
-      momo:     { price: 860, prev: 900, gift: null },
+      watsons:  { price: 880, prevPrice: 980, gift: null },
+      cosmed:   { price: 900, prevPrice: 900, gift: null },
+      momo:     { price: 860, prevPrice: 900, gift: null },
     },
     {
       id: 5, name: '雪花秀 時花秀顏霜 60ml', brand: 'Sulwhasoo', category: 'skincare', emoji: '🌸',
-      watsons:  { price: 5800, prev: 5800, gift: '贈潤顏霜 5ml' },
-      cosmed:   { price: 5600, prev: 5800, gift: null },
-      momo:     { price: 5500, prev: 5800, gift: null },
+      watsons:  { price: 5800, prevPrice: 5800, gift: '贈潤顏霜 5ml' },
+      cosmed:   { price: 5600, prevPrice: 5800, gift: null },
+      momo:     { price: 5500, prevPrice: 5800, gift: null },
     },
   ];
 
-  const ALERTS = [
-    { id: 1, type: 'drop', icon: '↓', iconClass: 'ai-red',    title: 'SK-II 神仙水 MOMO 降價 12%', platform: 'MOMO', platformClass: 'pb-momo', diff: '-$480', diffClass: 'neg', time: '03:12', unread: true, critical: true },
-    { id: 2, type: 'drop', icon: '↓', iconClass: 'ai-red',    title: '蘭蔻小黑瓶 康是美降價 11%',   platform: '康是美', platformClass: 'pb-cosmed', diff: '-$400', diffClass: 'neg', time: '03:09', unread: true, critical: false },
-    { id: 3, type: 'gift', icon: '🎁', iconClass: 'ai-violet', title: '蘭蔻小黑瓶 屈臣氏新增贈品',   platform: '屈臣氏', platformClass: 'pb-watsons', diff: '+贈品', diffClass: 'pos', time: '02:00', unread: true, critical: false },
-    { id: 4, type: 'drop', icon: '↓', iconClass: 'ai-red',    title: 'MAC Ruby Woo 屈臣氏降價 10%', platform: '屈臣氏', platformClass: 'pb-watsons', diff: '-$100', diffClass: 'neg', time: '昨日', unread: false, critical: false },
-    { id: 5, type: 'gift', icon: '🎁', iconClass: 'ai-violet', title: 'YSL #1966 康是美新增贈品',     platform: '康是美', platformClass: 'pb-cosmed', diff: '+贈品', diffClass: 'pos', time: '昨日', unread: false, critical: false },
+  const MOCK_ALERTS = [
+    { id: 1, type: 'price_drop', title: 'SK-II 神仙水 MOMO 降價 12%', platform: 'momo', old_value:'3960', new_value:'3480', created_at: new Date().toISOString(), is_read: 0 },
+    { id: 2, type: 'price_drop', title: '蘭蔻小黑瓶 康是美降價 11%',   platform: 'cosmed', old_value:'3600', new_value:'3200', created_at: new Date(Date.now()-3600000).toISOString(), is_read: 0 },
+    { id: 3, type: 'gift_added', title: '蘭蔻小黑瓶 屈臣氏新增贈品',   platform: 'watsons', old_value: '', new_value:'贈眼霜 5ml', created_at: new Date(Date.now()-7200000).toISOString(), is_read: 0 },
+    { id: 4, type: 'price_drop', title: 'MAC Ruby Woo 屈臣氏降價 10%', platform: 'watsons', old_value:'980', new_value:'880', created_at: new Date(Date.now()-86400000).toISOString(), is_read: 1 },
+    { id: 5, type: 'gift_added', title: 'YSL #1966 康是美新增贈品',     platform: 'cosmed', old_value: '', new_value:'贈化妝包', created_at: new Date(Date.now()-86400000).toISOString(), is_read: 1 },
   ];
 
   // Trend data (30 days)
@@ -911,7 +1005,50 @@
     },
   ];
 
-  // ── Clock ──────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  // ── Toast 通知系統 ────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  function toast(msg, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('removing');
+      setTimeout(() => el.remove(), 300);
+    }, duration);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── API 呼叫封裝（自動 fallback 到 mock data） ────────
+  // ═══════════════════════════════════════════════════════
+  async function apiFetch(path, options = {}) {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async function checkBackend() {
+    try {
+      await fetch(`${API_BASE}/api/dashboard/kpi`, { signal: AbortSignal.timeout(3000) });
+      isOnline = true;
+      document.getElementById('offline-banner').classList.remove('visible');
+    } catch {
+      isOnline = false;
+      document.getElementById('offline-banner').classList.add('visible');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── Clock ─────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
   function updateClock() {
     const now = new Date();
     document.getElementById('currentTime').textContent =
@@ -919,210 +1056,407 @@
   }
   updateClock(); setInterval(updateClock, 60000);
 
-  // ── Render Price Table ─────────────────────────────────
-  function renderTable(filter='all', category='all') {
-    const tbody = document.getElementById('priceTableBody');
-    let rows = '';
-    PRODUCTS
-      .filter(p => category === 'all' || p.category === category)
-      .filter(p => {
-        if (filter === 'drops') return [p.watsons,p.cosmed,p.momo].some(pl => pl.price < pl.prev);
-        if (filter === 'gifts') return [p.watsons,p.cosmed,p.momo].some(pl => pl.gift);
-        return true;
-      })
-      .forEach(p => {
-        const prices = [p.watsons.price, p.cosmed.price, p.momo.price];
-        const minP = Math.min(...prices);
-        const maxP = Math.max(...prices);
-
-        const pCell = (pl, label) => {
-          const isMin = pl.price === minP;
-          const isMax = pl.price === maxP;
-          const changed = pl.price !== pl.prev;
-          const pct = changed ? ((pl.price - pl.prev) / pl.prev * 100).toFixed(1) : null;
-          return `<td class="price-cell">
-            <div class="price-num ${isMin?'lowest':isMax?'highest':''}">${pl.price === 0 ? '—' : 'NT$' + pl.price.toLocaleString()}</div>
-            ${changed ? `<div class="price-change ${pl.price < pl.prev ? 'down':'up'}">${pl.price<pl.prev?'▼':'▲'} ${Math.abs(pct)}%</div>` : ''}
-          </td>`;
-        };
-
-        const lowestPlatform = ['watsons','cosmed','momo'][prices.indexOf(minP)];
-        const lpLabel = { watsons: '屈臣氏', cosmed: '康是美', momo: 'MOMO' };
-        const lpClass = { watsons: 'pb-watsons', cosmed: 'pb-cosmed', momo: 'pb-momo' };
-
-        const giftHtml = [
-          p.watsons.gift ? `<span class="gift-tag">屈 ${p.watsons.gift}</span>` : '',
-          p.cosmed.gift  ? `<span class="gift-tag">康 ${p.cosmed.gift}</span>` : '',
-          p.momo.gift    ? `<span class="gift-tag">M ${p.momo.gift}</span>` : '',
-        ].join('') || '<span style="color:var(--text-muted);font-size:11px">—</span>';
-
-        rows += `<tr>
-          <td>
-            <div class="product-cell">
-              <div class="product-img">${p.emoji}</div>
-              <div>
-                <div class="product-name">${p.name}</div>
-                <div class="product-brand">${p.brand}</div>
-              </div>
-            </div>
-          </td>
-          ${pCell(p.watsons, '屈臣氏')}
-          ${pCell(p.cosmed,  '康是美')}
-          ${pCell(p.momo,    'MOMO')}
-          <td class="price-cell">
-            <div class="price-num lowest">NT$${minP.toLocaleString()}</div>
-            <div style="margin-top:3px"><span class="platform-badge ${lpClass[lowestPlatform]}">${lpLabel[lowestPlatform]}</span></div>
-          </td>
-          <td>${giftHtml}</td>
-        </tr>`;
-      });
-    tbody.innerHTML = rows;
+  // ═══════════════════════════════════════════════════════
+  // ── KPI Cards ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  async function loadKPI() {
+    try {
+      const data = await apiFetch('/api/dashboard/kpi');
+      document.getElementById('kpiAlerts').textContent = data.todayAlerts ?? 0;
+      document.querySelector('.kpi-value.violet').textContent = data.productCount ?? 0;
+      document.getElementById('alertBadge').textContent = data.unreadAlerts ?? 0;
+      document.getElementById('alertBadge').style.display = data.unreadAlerts > 0 ? '' : 'none';
+    } catch {
+      // 保持 mock 數值，不顯示錯誤
+    }
   }
 
+  // ═══════════════════════════════════════════════════════
+  // ── Price Table ───────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  let currentProducts = [...MOCK_PRODUCTS];
   let currentFilter = 'all', currentCategory = 'all';
+
+  async function loadProducts() {
+    if (!isOnline) return;
+    try {
+      const data = await apiFetch('/api/dashboard/summary');
+      if (data?.length) currentProducts = data;
+    } catch { /* keep mock */ }
+  }
+
+  function renderTable(filter = currentFilter, category = currentCategory) {
+    currentFilter = filter; currentCategory = category;
+    const tbody = document.getElementById('priceTableBody');
+    const lpLabel = { watsons: '屈臣氏', cosmed: '康是美', momo: 'MOMO' };
+    const lpClass = { watsons: 'pb-watsons', cosmed: 'pb-cosmed', momo: 'pb-momo' };
+
+    const filtered = currentProducts
+      .filter(p => category === 'all' || p.category === category)
+      .filter(p => {
+        const pfs = [p.watsons, p.cosmed, p.momo].filter(Boolean);
+        if (filter === 'drops') return pfs.some(pl => pl.price && pl.prevPrice && pl.price < pl.prevPrice);
+        if (filter === 'gifts') return pfs.some(pl => pl.gift);
+        return true;
+      });
+
+    tbody.innerHTML = filtered.map(p => {
+      const pfs = [p.watsons, p.cosmed, p.momo].map(pl => pl?.price || 0).filter(v => v > 0);
+      const minP = pfs.length ? Math.min(...pfs) : 0;
+      const maxP = pfs.length ? Math.max(...pfs) : 0;
+
+      const pCell = (pl) => {
+        if (!pl || !pl.price) return `<td class="price-cell"><div class="price-num" style="color:var(--text-muted)">—</div></td>`;
+        const isMin = pl.price === minP && minP > 0;
+        const isMax = pl.price === maxP && maxP > minP;
+        const pct = pl.prevPrice && pl.price !== pl.prevPrice ? ((pl.price - pl.prevPrice) / pl.prevPrice * 100).toFixed(1) : null;
+        return `<td class="price-cell">
+          <div class="price-num ${isMin?'lowest':isMax?'highest':''}" >NT$${pl.price.toLocaleString()}</div>
+          ${pct ? `<div class="price-change ${pl.price < pl.prevPrice ? 'down':'up'}">${pl.price<pl.prevPrice?'▼':'▲'} ${Math.abs(pct)}%</div>` : ''}
+        </td>`;
+      };
+
+      const lowestPf = ['watsons','cosmed','momo'].find(k => p[k]?.price === minP) || 'momo';
+      const giftHtml = ['watsons','cosmed','momo']
+        .filter(k => p[k]?.gift)
+        .map(k => `<span class="gift-tag">${{watsons:'屈',cosmed:'康',momo:'M'}[k]} ${p[k].gift}</span>`)
+        .join('') || '<span style="color:var(--text-muted);font-size:11px">—</span>';
+
+      return `<tr>
+        <td><div class="product-cell">
+          <div class="product-img">${p.emoji || '✨'}</div>
+          <div><div class="product-name">${p.name}</div><div class="product-brand">${p.brand || ''}</div></div>
+        </div></td>
+        ${pCell(p.watsons)}${pCell(p.cosmed)}${pCell(p.momo)}
+        <td class="price-cell">
+          ${minP ? `<div class="price-num lowest">NT$${minP.toLocaleString()}</div>
+          <div style="margin-top:3px"><span class="platform-badge ${lpClass[lowestPf]}">${lpLabel[lowestPf]}</span></div>` : '—'}
+        </td>
+        <td>${giftHtml}</td>
+      </tr>`;
+    }).join('');
+  }
+
   function setTab(el, filter) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
-    currentFilter = filter;
     renderTable(filter, currentCategory);
   }
-  function filterCategory(cat) {
-    currentCategory = cat;
-    renderTable(currentFilter, cat);
+  function filterCategory(cat) { renderTable(currentFilter, cat); }
+
+  // ═══════════════════════════════════════════════════════
+  // ── Alert Feed ────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  let currentAlerts = [...MOCK_ALERTS];
+
+  async function loadAlerts() {
+    if (!isOnline) return;
+    try {
+      const data = await apiFetch('/api/alerts?limit=30');
+      if (data?.length) currentAlerts = data;
+    } catch { /* keep mock */ }
   }
 
-  // ── Render Alerts ──────────────────────────────────────
   function renderAlerts() {
     const list = document.getElementById('alertList');
     const badge = document.getElementById('alertBadge');
-    const unread = ALERTS.filter(a => a.unread).length;
+    const unread = currentAlerts.filter(a => !a.is_read).length;
     badge.textContent = unread;
     badge.style.display = unread > 0 ? '' : 'none';
 
-    list.innerHTML = ALERTS.map(a => `
-      <div class="alert-item ${a.unread ? 'unread':''} ${a.critical ? 'critical':''}">
-        <div class="alert-icon ${a.iconClass}">${a.icon}</div>
+    const typeMap = {
+      price_drop:   { icon: '↓', cls: 'ai-red',    pCls: 'neg' },
+      price_surge:  { icon: '↑', cls: 'ai-yellow',  pCls: 'pos' },
+      gift_added:   { icon: '🎁', cls: 'ai-violet',  pCls: 'pos' },
+      gift_removed: { icon: '⚠', cls: 'ai-yellow',  pCls: 'pos' },
+      back_in_stock:{ icon: '✓', cls: 'ai-green',   pCls: 'neg' },
+    };
+    const pfLabel = { watsons:'屈臣氏', cosmed:'康是美', momo:'MOMO', pchome:'PChome' };
+    const pfCls   = { watsons:'pb-watsons', cosmed:'pb-cosmed', momo:'pb-momo', pchome:'pb-watsons' };
+
+    list.innerHTML = currentAlerts.map(a => {
+      const t = typeMap[a.type] || { icon:'●', cls:'ai-violet', pCls:'neg' };
+      const isCritical = a.type === 'price_drop' && !a.is_read;
+      const timeFmt = a.created_at
+        ? new Date(a.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })
+        : '';
+      let diffText = '';
+      if ((a.type === 'price_drop' || a.type === 'price_surge') && a.old_value && a.new_value) {
+        const diff = parseInt(a.new_value) - parseInt(a.old_value);
+        diffText = `${diff > 0 ? '+':'-'}NT$${Math.abs(diff).toLocaleString()}`;
+      } else if (a.type === 'gift_added') diffText = '+贈品';
+      else if (a.type === 'gift_removed') diffText = '-贈品';
+
+      return `<div class="alert-item ${!a.is_read ? 'unread':''} ${isCritical ? 'critical':''}">
+        <div class="alert-icon ${t.cls}">${t.icon}</div>
         <div class="alert-body">
-          <div class="alert-title">${a.title}</div>
+          <div class="alert-title">${a.title || a.message}</div>
           <div class="alert-meta">
-            <span class="platform-badge ${a.platformClass}">${a.platform}</span>
-            <span class="alert-diff ${a.diffClass}">${a.diff}</span>
-            <span class="alert-time">${a.time}</span>
+            <span class="platform-badge ${pfCls[a.platform] || 'pb-watsons'}">${pfLabel[a.platform] || a.platform}</span>
+            ${diffText ? `<span class="alert-diff ${t.pCls}">${diffText}</span>` : ''}
+            <span class="alert-time">${timeFmt}</span>
           </div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
-  function markAllRead() {
-    ALERTS.forEach(a => a.unread = false);
+  async function markAllRead() {
+    if (isOnline) {
+      try { await apiFetch('/api/alerts/read-all', { method: 'PUT' }); }
+      catch { /* best effort */ }
+    }
+    currentAlerts.forEach(a => a.is_read = 1);
     renderAlerts();
     document.getElementById('kpiAlerts').textContent = '0';
+    toast('所有警示已標記為已讀', 'success');
   }
 
-  // ── Chart ──────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  // ── Trend Chart ───────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
   let trendChartInstance;
+  const MOCK_TREND_DATA = [
+    { watsons:[3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960], cosmed:[3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960], momo:[3960,3960,3960,3960,3960,3960,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3600,3600,3600,3600,3600,3480,3480] },
+    { watsons:[3600,3600,3600,3600,3600,3600,3600,3600,3400,3400,3400,3400,3400,3400,3400,3400,3400,3400,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200], cosmed:[3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3200,3200], momo:[3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,2980,2980,2980] },
+    { watsons:[1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350], cosmed:[1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350], momo:[1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1280,1280] },
+    { watsons:[980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,880,880], cosmed:[900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900], momo:[900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,860,860,860,860,860,860,860,860] },
+  ];
 
   function generateLabels() {
-    const labels = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      labels.push(`${d.getMonth()+1}/${d.getDate()}`);
-    }
-    return labels;
+    return Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (29 - i));
+      return `${d.getMonth()+1}/${d.getDate()}`;
+    });
   }
 
-  function initChart() {
+  function initChart(watsonsData, cosmedData, momoData) {
     const ctx = document.getElementById('trendChart').getContext('2d');
-    const idx = parseInt(document.getElementById('trendProduct').value);
-    const d = TREND_DATA[idx];
-
+    const d = MOCK_TREND_DATA[0];
     trendChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
         labels: generateLabels(),
         datasets: [
-          { label: '屈臣氏', data: d.watsons, borderColor: '#00a0e3', backgroundColor: '#00a0e310', tension: 0.4, pointRadius: 0, borderWidth: 2, fill: false },
-          { label: '康是美', data: d.cosmed,  borderColor: '#f47920', backgroundColor: '#f4792010', tension: 0.4, pointRadius: 0, borderWidth: 2, fill: false },
-          { label: 'MOMO',   data: d.momo,    borderColor: '#e83750', backgroundColor: '#e8375010', tension: 0.4, pointRadius: 0, borderWidth: 2, fill: true  },
+          { label:'屈臣氏', data: watsonsData || d.watsons, borderColor:'#00a0e3', backgroundColor:'#00a0e310', tension:0.4, pointRadius:0, borderWidth:2, fill:false },
+          { label:'康是美', data: cosmedData  || d.cosmed,  borderColor:'#f47920', backgroundColor:'#f4792010', tension:0.4, pointRadius:0, borderWidth:2, fill:false },
+          { label:'MOMO',   data: momoData    || d.momo,    borderColor:'#e83750', backgroundColor:'#e8375010', tension:0.4, pointRadius:0, borderWidth:2, fill:true },
         ]
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
+        responsive:true, maintainAspectRatio:false,
         plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#13102299',
-            titleColor: '#f0e8ff', bodyColor: '#9d8fba',
-            borderColor: '#2a2245', borderWidth: 1,
-            callbacks: {
-              label: ctx => ` NT$${ctx.raw.toLocaleString()}`
-            }
-          }
+          legend:{ display:false },
+          tooltip:{ backgroundColor:'#13102299', titleColor:'#f0e8ff', bodyColor:'#9d8fba', borderColor:'#2a2245', borderWidth:1,
+            callbacks:{ label: c => ` NT$${c.raw.toLocaleString()}` } }
         },
         scales: {
-          x: {
-            ticks: { color: '#5c5075', font: { family: 'DM Mono', size: 10 }, maxTicksLimit: 8 },
-            grid:  { color: '#ffffff08' }
-          },
-          y: {
-            ticks: { color: '#5c5075', font: { family: 'DM Mono', size: 10 }, callback: v => 'NT$' + v.toLocaleString() },
-            grid:  { color: '#ffffff08' }
-          }
+          x:{ ticks:{ color:'#5c5075', font:{ family:'DM Mono', size:10 }, maxTicksLimit:8 }, grid:{ color:'#ffffff08' } },
+          y:{ ticks:{ color:'#5c5075', font:{ family:'DM Mono', size:10 }, callback: v => 'NT$'+v.toLocaleString() }, grid:{ color:'#ffffff08' } }
         }
       }
     });
   }
 
-  function updateChart() {
+  async function updateChart() {
     const idx = parseInt(document.getElementById('trendProduct').value);
-    const d = TREND_DATA[idx];
+    const productId = currentProducts[idx]?.id;
+
+    if (isOnline && productId) {
+      try {
+        const trend = await apiFetch(`/api/prices/trend/${productId}`);
+        const toArr = (pf) => {
+          if (!trend[pf]?.length) return MOCK_TREND_DATA[idx]?.[pf] || [];
+          // 填滿 30 天空白
+          const map = Object.fromEntries(trend[pf].map(r => [r.date, r.price]));
+          return generateLabels().map((lbl, i) => {
+            const d = new Date(); d.setDate(d.getDate() - (29-i));
+            const key = d.toISOString().slice(0,10);
+            return map[key] || null;
+          });
+        };
+        trendChartInstance.data.datasets[0].data = toArr('watsons');
+        trendChartInstance.data.datasets[1].data = toArr('cosmed');
+        trendChartInstance.data.datasets[2].data = toArr('momo');
+        trendChartInstance.update('active');
+        return;
+      } catch { /* fallback */ }
+    }
+    // fallback to mock
+    const d = MOCK_TREND_DATA[idx] || MOCK_TREND_DATA[0];
     trendChartInstance.data.datasets[0].data = d.watsons;
     trendChartInstance.data.datasets[1].data = d.cosmed;
     trendChartInstance.data.datasets[2].data = d.momo;
     trendChartInstance.update('active');
   }
 
-  // ── Nav ────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  // ── Scraper Trigger ───────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  async function simulateScrape() {
+    const dot = document.getElementById('statusDot');
+    const txt = document.getElementById('statusText');
+    const log = document.getElementById('logStrip');
+    const btn = document.querySelector('button[onclick="simulateScrape()"]');
+
+    dot.classList.remove('idle');
+    txt.textContent = '爬蟲運行中';
+    btn.classList.add('loading');
+    log.innerHTML = '<span style="color:var(--amethyst)">⟳</span> <span style="color:var(--text-secondary);font-size:11px">正在執行全平台爬取…</span>';
+
+    if (isOnline) {
+      try {
+        const result = await apiFetch('/api/scraper/run', { method: 'POST' });
+        dot.classList.add('idle'); txt.textContent = '閒置中';
+        btn.classList.remove('loading');
+        log.innerHTML = `
+          <span class="log-entry"><span class="ok">✓</span> 爬取完成</span>
+          <span style="color:#2a2245">│</span>
+          <span class="log-entry"><span class="ok">✓</span> 成功 ${result.scraped} 筆</span>
+          <span style="color:#2a2245">│</span>
+          <span class="log-entry"><span class="${result.errors > 0 ? 'err':'ok'}">${result.errors > 0 ? '✗':'✓'}</span> 失敗 ${result.errors} 筆</span>`;
+        toast(`爬取完成：${result.scraped} 筆成功`, result.errors > 0 ? 'info' : 'success');
+        await refreshAll();
+        return;
+      } catch (err) {
+        toast(`爬蟲失敗：${err.message}`, 'error');
+      }
+    }
+
+    // 離線時模擬
+    await new Promise(r => setTimeout(r, 2500));
+    dot.classList.add('idle'); txt.textContent = '閒置中';
+    btn.classList.remove('loading');
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    log.innerHTML = `
+      <span class="log-entry"><span class="ts">${hh}:${mm}</span><span class="ok">✓</span> 屈臣氏</span>
+      <span style="color:#2a2245">│</span>
+      <span class="log-entry"><span class="ok">✓</span> 康是美</span>
+      <span style="color:#2a2245">│</span>
+      <span class="log-entry"><span class="ok">✓</span> MOMO</span>
+      <span style="color:#2a2245">│</span>
+      <span class="log-entry"><span style="color:var(--text-muted)">（示範模式）</span></span>`;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── LINE 設定 ─────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  async function loadLineSettings() {
+    if (!isOnline) return;
+    try {
+      const s = await apiFetch('/api/line/settings');
+      document.getElementById('lineToken').value   = s.hasToken  ? '••••••••' : '';
+      document.getElementById('lineSecret').value  = s.hasSecret ? '••••••••' : '';
+      document.getElementById('lineUserId').value  = s.user_id   || '';
+      document.getElementById('threshold').value   = s.price_drop_threshold ?? 5;
+
+      setToggle('togglePriceDrop',   s.notify_price_drop);
+      setToggle('toggleGiftChange',  s.notify_gift_change);
+      setToggle('toggleDailyReport', s.daily_report_enabled);
+
+      // 更新連線狀態徽章
+      const badge = document.getElementById('lineStatusBadge');
+      const text  = document.getElementById('lineStatusText');
+      if (s.hasToken && s.user_id) {
+        badge.className = 'line-status connected';
+        text.textContent = '已連線';
+      } else {
+        badge.className = 'line-status disconnected';
+        text.textContent = s.hasToken ? '缺少 User ID' : '未設定';
+      }
+    } catch { /* API 未上線，靜默 */ }
+  }
+
+  function setToggle(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val) el.classList.add('on'); else el.classList.remove('on');
+  }
+
+  async function saveSettings() {
+    const token   = document.getElementById('lineToken').value.trim();
+    const secret  = document.getElementById('lineSecret').value.trim();
+    const userId  = document.getElementById('lineUserId').value.trim();
+    const threshold = parseFloat(document.getElementById('threshold').value);
+
+    if (!userId) { toast('請填寫 LINE User ID', 'error'); return; }
+
+    const payload = {
+      channel_access_token: token,
+      channel_secret:       secret,
+      user_id:              userId,
+      price_drop_threshold: threshold,
+      notify_price_drop:    document.getElementById('togglePriceDrop').classList.contains('on') ? 1 : 0,
+      notify_gift_change:   document.getElementById('toggleGiftChange').classList.contains('on') ? 1 : 0,
+      daily_report_enabled: document.getElementById('toggleDailyReport').classList.contains('on') ? 1 : 0,
+    };
+
+    const btn = document.getElementById('btnSaveSettings');
+    btn.classList.add('loading');
+
+    if (isOnline) {
+      try {
+        await apiFetch('/api/line/settings', { method: 'PUT', body: JSON.stringify(payload) });
+        toast('✅ LINE 通知設定已儲存', 'success');
+        await loadLineSettings(); // 重新載入以更新狀態徽章
+      } catch (err) {
+        toast(`儲存失敗：${err.message}`, 'error');
+      }
+    } else {
+      toast('⚠ 後端離線，設定無法儲存至伺服器', 'error');
+    }
+    btn.classList.remove('loading');
+  }
+
+  async function testLine() {
+    const token  = document.getElementById('lineToken').value.trim();
+    const userId = document.getElementById('lineUserId').value.trim();
+
+    if (!token || token.startsWith('••')) { toast('請先輸入 LINE Channel Access Token', 'error'); return; }
+    if (!userId) { toast('請填寫推播目標 User ID', 'error'); return; }
+
+    const btn = document.getElementById('btnTestLine');
+    btn.classList.add('loading');
+
+    try {
+      if (!isOnline) throw new Error('後端離線');
+      await apiFetch('/api/line/test', { method: 'POST', body: JSON.stringify({ token, userId }) });
+      toast('✅ 測試訊息已發送！請查看您的 LINE', 'success', 6000);
+    } catch (err) {
+      toast(`LINE 測試失敗：${err.message}`, 'error');
+    }
+    btn.classList.remove('loading');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ── Nav ───────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════
   function setNav(el, page) {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
   }
 
-  // ── Simulate Scrape ────────────────────────────────────
-  function simulateScrape() {
-    const dot = document.getElementById('statusDot');
-    const txt = document.getElementById('statusText');
-    dot.classList.remove('idle'); txt.textContent = '爬蟲運行中';
-    const log = document.getElementById('logStrip');
-    log.innerHTML = '<span style="color:var(--amethyst)">⟳</span><span style="color:var(--text-secondary); font-size:11px">正在執行全平台爬取…</span>';
-    setTimeout(() => {
-      dot.classList.add('idle'); txt.textContent = '閒置中';
-      log.innerHTML = `
-        <span class="log-entry"><span class="ts">${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2,'0')}</span><span class="ok">✓</span> 屈臣氏 18/18</span>
-        <span style="color:#2a2245">│</span>
-        <span class="log-entry"><span class="ts">+4m</span><span class="ok">✓</span> 康是美 18/18</span>
-        <span style="color:#2a2245">│</span>
-        <span class="log-entry"><span class="ts">+8m</span><span class="ok">✓</span> MOMO 18/18</span>
-        <span style="color:#2a2245">│</span>
-        <span class="log-entry"><span class="ts">+10m</span><span class="ok">✓</span> 完成 · 0 筆異動</span>`;
-    }, 2800);
-  }
-
-  // ── LINE Test ──────────────────────────────────────────
-  function testLine() {
-    const token = document.getElementById('lineToken').value;
-    if (!token) { alert('請先輸入 LINE Channel Access Token'); return; }
-    alert('✅ 測試訊息已發送！請查看您的 LINE 群組。');
-  }
-
-  function saveSettings() {
-    alert('✅ LINE 通知設定已儲存');
+  // ═══════════════════════════════════════════════════════
+  // ── 統一刷新（每 5 分鐘自動執行） ─────────────────────
+  // ═══════════════════════════════════════════════════════
+  async function refreshAll() {
+    await checkBackend();
+    await Promise.all([loadKPI(), loadProducts(), loadAlerts()]);
+    renderTable(); renderAlerts();
+    await updateChart();
+    if (isOnline) loadLineSettings();
   }
 
   // ── Init ───────────────────────────────────────────────
-  renderTable();
-  renderAlerts();
-  initChart();
+  (async () => {
+    renderTable();         // 先用 mock 渲染，不卡畫面
+    renderAlerts();
+    initChart();
+    await refreshAll();    // 再嘗試拿真實資料
+    setInterval(refreshAll, 5 * 60 * 1000); // 每 5 分鐘自動刷新
+  })();
   </script>
 </body>
 </html>

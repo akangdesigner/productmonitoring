@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Competitive Intel — 美妝競品監控台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Mono:wght@300;400;500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-deep:    #07050f;
+      --bg-base:    #0d0b1a;
+      --bg-surface: #13102298;
+      --bg-card:    #16132680;
+      --border:     #2a2245;
+      --border-glow:#9b6dca33;
+      --rose:       #d4956a;
+      --rose-light: #e8b89a;
+      --rose-dim:   #d4956a44;
+      --amethyst:   #9b6dca;
+      --amethyst-light: #c084fc;
+      --amethyst-dim:   #9b6dca33;
+      --text-primary:   #f0e8ff;
+      --text-secondary: #9d8fba;
+      --text-muted:     #5c5075;
+      --green:      #4ade80;
+      --green-dim:  #4ade8020;
+      --red:        #ff4d6d;
+      --red-dim:    #ff4d6d20;
+      --yellow:     #fbbf24;
+      --watsons:    #00a0e3;
+      --cosmed:     #f47920;
+      --momo:       #e83750;
+      --pchome:     #cc0000;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: 'Noto Sans TC', sans-serif;
+      font-weight: 300;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Noise Texture Overlay ─── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ─── Ambient Glow Orbs ─── */
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(120px);
+      pointer-events: none; z-index: 0;
+    }
+    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, #9b6dca18 0%, transparent 70%); top: -200px; left: -100px; }
+    .orb-2 { width: 500px; height: 500px; background: radial-gradient(circle, #d4956a14 0%, transparent 70%); bottom: -100px; right: -100px; }
+    .orb-3 { width: 400px; height: 400px; background: radial-gradient(circle, #ff4d6d0a 0%, transparent 70%); top: 50%; left: 60%; }
+
+    /* ─── Layout ─── */
+    .layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+      position: relative; z-index: 1;
+    }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      grid-row: 1 / -1;
+      background: linear-gradient(180deg, #0f0c1f 0%, #0a0817 100%);
+      border-right: 1px solid var(--border);
+      padding: 28px 0;
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+
+    .sidebar-logo {
+      padding: 0 24px 28px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      color: var(--rose);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .logo-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      font-weight: 300;
+      background: linear-gradient(135deg, var(--rose-light), var(--amethyst-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1.2;
+    }
+    .logo-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      margin-top: 2px;
+    }
+
+    .nav { padding: 20px 0; flex: 1; }
+    .nav-section-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      padding: 0 24px 8px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 24px;
+      font-size: 13px; font-weight: 400;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+      border-left: 2px solid transparent;
+    }
+    .nav-item:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .nav-item.active {
+      color: var(--rose-light);
+      border-left-color: var(--rose);
+      background: var(--rose-dim);
+    }
+    .nav-item .icon { font-size: 14px; width: 18px; text-align: center; }
+    .nav-badge {
+      margin-left: auto;
+      background: var(--red);
+      color: #fff;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+
+    .sidebar-status {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .status-row { display: flex; align-items: center; gap: 8px; color: var(--text-muted); margin-bottom: 6px; }
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+    .status-dot.idle { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+    .status-next { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); }
+
+    /* ─── Header ─── */
+    .header {
+      grid-column: 2;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, var(--bg-deep) 0%, #0d0b1a 100%);
+      backdrop-filter: blur(12px);
+    }
+    .header-left h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 26px; font-weight: 300;
+      letter-spacing: 0.03em;
+    }
+    .header-left h1 em { font-style: italic; color: var(--rose-light); }
+    .header-left p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+
+    .last-update {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; color: var(--text-muted);
+      text-align: right;
+    }
+    .last-update span { display: block; color: var(--text-secondary); }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.2s;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--rose) 0%, var(--amethyst) 100%);
+      color: #fff;
+    }
+    .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); box-shadow: 0 4px 20px var(--amethyst-dim); }
+    .btn-ghost {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-ghost:hover { border-color: var(--amethyst); color: var(--text-primary); }
+    .btn-icon { font-size: 14px; }
+
+    /* ─── Main Content ─── */
+    .main {
+      grid-column: 2;
+      padding: 28px 32px;
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 24px;
+    }
+
+    /* ─── KPI Cards ─── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative; overflow: hidden;
+      transition: all 0.3s;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 60%, var(--accent, #9b6dca18) 100%);
+    }
+    .kpi-card:hover { border-color: var(--amethyst); transform: translateY(-2px); box-shadow: 0 8px 30px var(--amethyst-dim); }
+
+    .kpi-card[data-accent="rose"]   { --accent: #d4956a18; }
+    .kpi-card[data-accent="green"]  { --accent: #4ade8018; }
+    .kpi-card[data-accent="red"]    { --accent: #ff4d6d18; }
+    .kpi-card[data-accent="violet"] { --accent: #9b6dca18; }
+
+    .kpi-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; letter-spacing: 0.15em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .kpi-value {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 38px; font-weight: 600;
+      line-height: 1;
+    }
+    .kpi-value.rose   { color: var(--rose-light); }
+    .kpi-value.green  { color: var(--green); }
+    .kpi-value.red    { color: var(--red); }
+    .kpi-value.violet { color: var(--amethyst-light); }
+    .kpi-sub {
+      font-size: 11px; color: var(--text-muted);
+      margin-top: 8px;
+    }
+    .kpi-sub .badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 2px 7px; border-radius: 4px;
+    }
+    .badge-green { background: var(--green-dim); color: var(--green); }
+    .badge-red   { background: var(--red-dim);   color: var(--red); }
+
+    /* ─── Section Headers ─── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 18px; font-weight: 400;
+      letter-spacing: 0.04em;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-title::before {
+      content: '';
+      width: 3px; height: 18px; border-radius: 2px;
+      background: linear-gradient(180deg, var(--rose), var(--amethyst));
+    }
+    .section-actions { display: flex; gap: 8px; }
+
+    /* ─── Platform Tabs ─── */
+    .tab-bar {
+      display: flex; gap: 0;
+      border-radius: 8px; overflow: hidden;
+      border: 1px solid var(--border);
+      width: fit-content;
+    }
+    .tab {
+      padding: 6px 14px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; letter-spacing: 0.05em;
+      cursor: pointer; transition: all 0.2s;
+      color: var(--text-muted);
+      background: var(--bg-surface);
+      border: none;
+    }
+    .tab:hover { color: var(--text-primary); }
+    .tab.active { background: var(--amethyst); color: #fff; }
+
+    /* ─── Price Table ─── */
+    .table-wrap {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .price-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .price-table thead tr {
+      background: #0f0d1f;
+      border-bottom: 1px solid var(--border);
+    }
+    .price-table th {
+      padding: 12px 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; letter-spacing: 0.12em;
+      color: var(--text-muted);
+      text-align: left;
+      text-transform: uppercase;
+    }
+    .price-table th.platform-col { text-align: right; }
+    .price-table td {
+      padding: 14px 16px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .price-table tbody tr:last-child td { border-bottom: none; }
+    .price-table tbody tr {
+      transition: background 0.2s;
+    }
+    .price-table tbody tr:hover { background: var(--bg-surface); }
+
+    .product-cell { display: flex; align-items: center; gap: 12px; }
+    .product-img {
+      width: 40px; height: 40px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--rose-dim), var(--amethyst-dim));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .product-name { font-weight: 400; font-size: 13px; line-height: 1.3; }
+    .product-brand { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    .price-cell { text-align: right; }
+    .price-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 14px; font-weight: 500;
+    }
+    .price-num.lowest { color: var(--green); }
+    .price-num.highest { color: var(--red); }
+    .price-change {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; margin-top: 2px;
+    }
+    .price-change.down { color: var(--green); }
+    .price-change.up   { color: var(--red); }
+
+    .platform-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 8px; border-radius: 4px;
+      font-family: 'DM Mono', monospace; font-size: 10px;
+    }
+    .pb-watsons { background: #00a0e315; color: var(--watsons); border: 1px solid #00a0e330; }
+    .pb-cosmed  { background: #f4792015; color: var(--cosmed);  border: 1px solid #f4792030; }
+    .pb-momo    { background: #e8375015; color: var(--momo);    border: 1px solid #e8375030; }
+
+    .gift-tag {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 6px; border-radius: 4px;
+      font-size: 10px;
+      background: var(--amethyst-dim);
+      color: var(--amethyst-light);
+      border: 1px solid var(--amethyst-dim);
+      margin-left: 4px;
+    }
+
+    /* ─── Trend + Alert Grid ─── */
+    .mid-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px;
+    }
+
+    /* ─── Chart Card ─── */
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+    }
+    .chart-legend {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 6px;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: var(--text-secondary); cursor: pointer;
+    }
+    .legend-dot {
+      width: 10px; height: 3px; border-radius: 2px;
+    }
+    .chart-container { position: relative; height: 220px; }
+
+    /* ─── Product Selector ─── */
+    .select-styled {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: 'Noto Sans TC', sans-serif;
+      font-size: 12px; cursor: pointer;
+      outline: none;
+    }
+    .select-styled:focus { border-color: var(--amethyst); }
+
+    /* ─── Alert Feed ─── */
+    .alert-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+      display: flex; flex-direction: column;
+    }
+    .alert-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 300px; flex: 1; }
+
+    .alert-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex; gap: 10px;
+      align-items: flex-start;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .alert-item:hover { border-color: var(--amethyst); }
+    .alert-item.unread::after {
+      content: '';
+      position: absolute; top: 10px; right: 10px;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--rose);
+      box-shadow: 0 0 6px var(--rose);
+    }
+    .alert-item.critical {
+      border-color: var(--red-dim);
+      background: #ff4d6d08;
+      animation: pulse-alert 3s infinite;
+    }
+    @keyframes pulse-alert {
+      0%, 100% { border-color: #ff4d6d40; }
+      50% { border-color: #ff4d6d90; box-shadow: 0 0 12px #ff4d6d20; }
+    }
+
+    .alert-icon {
+      width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    .ai-red    { background: var(--red-dim);       }
+    .ai-green  { background: var(--green-dim);     }
+    .ai-violet { background: var(--amethyst-dim);  }
+    .ai-yellow { background: #fbbf2420;             }
+
+    .alert-body { flex: 1; min-width: 0; }
+    .alert-title { font-size: 12px; font-weight: 500; line-height: 1.3; }
+    .alert-meta {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 5px;
+    }
+    .alert-platform { font-family: 'DM Mono', monospace; font-size: 10px; }
+    .alert-time { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); margin-left: auto; }
+    .alert-diff {
+      font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
+    }
+    .alert-diff.neg { color: var(--green); }
+    .alert-diff.pos { color: var(--red); }
+
+    /* ─── Bottom Row: LINE Settings ─── */
+    .settings-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-top: 18px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; letter-spacing: 0.12em;
+      color: var(--text-muted); text-transform: uppercase;
+    }
+    .form-input {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 12px;
+      color: var(--text-primary);
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      outline: none; transition: border-color 0.2s;
+      width: 100%;
+    }
+    .form-input:focus { border-color: var(--amethyst); box-shadow: 0 0 0 3px var(--amethyst-dim); }
+    .form-input::placeholder { color: var(--text-muted); }
+
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-label { font-size: 12px; color: var(--text-secondary); }
+    .toggle {
+      width: 36px; height: 20px; border-radius: 10px;
+      background: var(--border); cursor: pointer;
+      position: relative; transition: background 0.3s;
+    }
+    .toggle.on { background: var(--amethyst); }
+    .toggle::after {
+      content: '';
+      position: absolute; top: 3px; left: 3px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; transition: left 0.3s;
+    }
+    .toggle.on::after { left: 19px; }
+
+    .settings-actions {
+      display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;
+    }
+
+    /* ─── Scraper Log strip ─── */
+    .log-strip {
+      background: #050410;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex; gap: 16px; align-items: center;
+      overflow-x: auto;
+    }
+    .log-entry { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .log-entry .ts { color: var(--amethyst); }
+    .log-entry .ok { color: var(--green); }
+    .log-entry .err { color: var(--red); }
+
+    /* ─── Scrollbar Styling ─── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--amethyst); }
+
+    /* ─── Fade in animation ─── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .kpi-card  { animation: fadeUp 0.5s ease both; }
+    .kpi-card:nth-child(1) { animation-delay: 0.05s; }
+    .kpi-card:nth-child(2) { animation-delay: 0.10s; }
+    .kpi-card:nth-child(3) { animation-delay: 0.15s; }
+    .kpi-card:nth-child(4) { animation-delay: 0.20s; }
+
+    /* ─── Tooltips ─── */
+    [data-tip] { position: relative; }
+    [data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%);
+      background: #1a1530; border: 1px solid var(--border);
+      color: var(--text-primary); font-size: 11px;
+      padding: 4px 10px; border-radius: 5px; white-space: nowrap;
+      pointer-events: none; z-index: 999;
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 1200px) {
+      .layout { grid-template-columns: 200px 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .mid-grid { grid-template-columns: 1fr; }
+      .settings-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="layout">
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-tag">Beauty · Intel</div>
+        <div class="logo-name">Competitive<br>Monitor</div>
+        <div class="logo-sub">競品監控台 v1.0</div>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-section-title">主要功能</div>
+        <div class="nav-item active" onclick="setNav(this,'dashboard')">
+          <span class="icon">◈</span> 監控儀表板
+        </div>
+        <div class="nav-item" onclick="setNav(this,'products')">
+          <span class="icon">◇</span> 商品管理
+        </div>
+        <div class="nav-item" onclick="setNav(this,'alerts')">
+          <span class="icon">◉</span> 警示記錄
+          <span class="nav-badge" id="alertBadge">3</span>
+        </div>
+        <div class="nav-item" onclick="setNav(this,'trends')">
+          <span class="icon">◈</span> 趨勢分析
+        </div>
+
+        <div class="nav-section-title" style="margin-top:16px">系統設定</div>
+        <div class="nav-item" onclick="setNav(this,'line')">
+          <span class="icon">✦</span> LINE 通知
+        </div>
+        <div class="nav-item" onclick="setNav(this,'scraper')">
+          <span class="icon">◌</span> 爬蟲排程
+        </div>
+      </nav>
+
+      <div class="sidebar-status">
+        <div class="status-row">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">爬蟲運行中</span>
+        </div>
+        <div class="status-next" id="nextRun">下次執行：04:00</div>
+      </div>
+    </aside>
+
+    <!-- ── Header ── -->
+    <header class="header">
+      <div class="header-left">
+        <h1>價格與贈品 <em>監控台</em></h1>
+        <p>監控屈臣氏・康是美・MOMO・競品官網｜即時比價・降價預警</p>
+      </div>
+      <div class="header-right">
+        <div class="last-update">
+          <span id="currentTime">—</span>
+          最後更新
+        </div>
+        <button class="btn btn-ghost btn-icon" onclick="simulateScrape()" data-tip="手動觸發爬蟲">
+          ↻ 立即抓取
+        </button>
+        <button class="btn btn-primary">
+          ✦ 新增商品
+        </button>
+      </div>
+    </header>
+
+    <!-- ── Main Content ── -->
+    <main class="main">
+
+      <!-- KPI Row -->
+      <div class="kpi-grid">
+        <div class="kpi-card" data-accent="violet">
+          <div class="kpi-label">監控商品</div>
+          <div class="kpi-value violet">18</div>
+          <div class="kpi-sub">跨 3 大平台・共 54 個連結</div>
+        </div>
+        <div class="kpi-card" data-accent="red">
+          <div class="kpi-label">今日警示</div>
+          <div class="kpi-value red" id="kpiAlerts">3</div>
+          <div class="kpi-sub">
+            <span class="badge badge-red">↓ 2 降價</span>&nbsp;
+            <span class="badge badge-green">+ 1 贈品</span>
+          </div>
+        </div>
+        <div class="kpi-card" data-accent="green">
+          <div class="kpi-label">最低價平台</div>
+          <div class="kpi-value green" style="font-size:22px; padding-top:6px">MOMO</div>
+          <div class="kpi-sub">11 件商品最低 · 本週領先</div>
+        </div>
+        <div class="kpi-card" data-accent="rose">
+          <div class="kpi-label">最大價差商品</div>
+          <div class="kpi-value rose" style="font-size:18px; padding-top:4px; line-height:1.4">SK-II<br>神仙水</div>
+          <div class="kpi-sub"><span class="badge badge-red">差距 $480</span></div>
+        </div>
+      </div>
+
+      <!-- Scraper Log -->
+      <div class="log-strip" id="logStrip">
+        <span class="log-entry"><span class="ts">03:00</span><span class="ok">✓</span> 屈臣氏 18/18</span>
+        <span style="color:#2a2245">│</span>
+        <span class="log-entry"><span class="ts">03:04</span><span class="ok">✓</span> 康是美 18/18</span>
+        <span style="color:#2a2245">│</span>
+        <span class="log-entry"><span class="ts">03:09</span><span class="ok">✓</span> MOMO 18/18</span>
+        <span style="color:#2a2245">│</span>
+        <span class="log-entry"><span class="ts">03:12</span><span class="ok">✓</span> 全部完成 · 3 筆異動</span>
+      </div>
+
+      <!-- Price Table -->
+      <div>
+        <div class="section-header">
+          <div class="section-title">即時比價總覽</div>
+          <div class="section-actions">
+            <select class="select-styled" onchange="filterCategory(this.value)">
+              <option value="all">全部品類</option>
+              <option value="skincare">保養</option>
+              <option value="makeup">彩妝</option>
+              <option value="haircare">洗護</option>
+            </select>
+            <div class="tab-bar">
+              <button class="tab active" onclick="setTab(this,'all')">全部</button>
+              <button class="tab" onclick="setTab(this,'drops')">降價中</button>
+              <button class="tab" onclick="setTab(this,'gifts')">有贈品</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="price-table" id="priceTable">
+            <thead>
+              <tr>
+                <th style="width:260px">商品</th>
+                <th class="platform-col"><span class="platform-badge pb-watsons">屈臣氏</span></th>
+                <th class="platform-col"><span class="platform-badge pb-cosmed">康是美</span></th>
+                <th class="platform-col"><span class="platform-badge pb-momo">MOMO</span></th>
+                <th class="platform-col" style="color:#f0e8ff">最低價</th>
+                <th>贈品活動</th>
+              </tr>
+            </thead>
+            <tbody id="priceTableBody">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Mid Grid: Chart + Alerts -->
+      <div class="mid-grid">
+        <!-- Trend Chart -->
+        <div class="chart-card">
+          <div class="section-header" style="margin-bottom:0">
+            <div class="section-title">30 日價格走勢</div>
+            <select class="select-styled" id="trendProduct" onchange="updateChart()">
+              <option value="0">SK-II 神仙水 230ml</option>
+              <option value="1">蘭蔻 小黑瓶精華 50ml</option>
+              <option value="2">YSL 奢華唇膏 #Rouge Pur</option>
+              <option value="3">MAC 子彈唇膏 #Ruby Woo</option>
+            </select>
+          </div>
+          <div class="chart-legend" style="margin-top:14px">
+            <div class="legend-item"><div class="legend-dot" style="background:#00a0e3"></div>屈臣氏</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f47920"></div>康是美</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e83750"></div>MOMO</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Alert Feed -->
+        <div class="alert-card">
+          <div class="section-header" style="margin-bottom:12px">
+            <div class="section-title">警示動態</div>
+            <button class="btn btn-ghost" style="font-size:11px; padding:5px 10px" onclick="markAllRead()">全部已讀</button>
+          </div>
+          <div class="alert-list" id="alertList">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- LINE Settings -->
+      <div class="settings-card">
+        <div class="section-header" style="margin-bottom:0">
+          <div class="section-title">LINE 通知設定</div>
+          <button class="btn btn-ghost" style="font-size:11px; padding:5px 10px" onclick="testLine()">📩 發送測試訊息</button>
+        </div>
+
+        <div class="settings-grid">
+          <div class="form-group">
+            <label class="form-label">Channel Access Token</label>
+            <input type="password" class="form-input" placeholder="輸入 LINE Channel Token…" id="lineToken">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Channel Secret</label>
+            <input type="password" class="form-input" placeholder="輸入 Channel Secret…" id="lineSecret">
+          </div>
+          <div class="form-group">
+            <label class="form-label">推播目標 User ID</label>
+            <input type="text" class="form-input" placeholder="U1234abcd…" id="lineUserId">
+          </div>
+
+          <div style="border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
+            <div class="toggle-row">
+              <span class="toggle-label">降價通知</span>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="toggle-row">
+              <span class="toggle-label">贈品異動通知</span>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="toggle-row">
+              <span class="toggle-label">每日早報（09:00）</span>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">降價觸發門檻（%）</label>
+            <input type="number" class="form-input" value="5" min="1" max="50" id="threshold">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">LINE 通知預覽</label>
+            <div style="background:#06c75510; border:1px solid #06c75530; border-radius:8px; padding:10px; font-size:11px; line-height:1.7; color:var(--text-secondary);">
+              🚨 <strong style="color:var(--text-primary)">警報！</strong><br>
+              MOMO・SK-II 神仙水 230ml<br>
+              降價 <span style="color:var(--red)">12%</span>（$3,480 → $3,060）<br>
+              <span style="color:var(--text-muted)">建議跟進調整定價策略</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn-ghost">取消</button>
+          <button class="btn btn-primary" onclick="saveSettings()">儲存設定</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+  // ── Mock Data ──────────────────────────────────────────
+  const PRODUCTS = [
+    {
+      id: 1, name: 'SK-II 神仙水 230ml', brand: 'SK-II', category: 'skincare', emoji: '✨',
+      watsons:  { price: 3960, prev: 3960, gift: null },
+      cosmed:   { price: 3960, prev: 3960, gift: '贈 7ml 體驗版' },
+      momo:     { price: 3480, prev: 3960, gift: null },
+    },
+    {
+      id: 2, name: '蘭蔻 小黑瓶精華 50ml', brand: 'Lancôme', category: 'skincare', emoji: '🖤',
+      watsons:  { price: 3200, prev: 3200, gift: '贈眼霜 5ml' },
+      cosmed:   { price: 3200, prev: 3600, gift: null },
+      momo:     { price: 2980, prev: 3200, gift: null },
+    },
+    {
+      id: 3, name: 'YSL 奢華唇膏 #1966', brand: 'Yves Saint Laurent', category: 'makeup', emoji: '💄',
+      watsons:  { price: 1350, prev: 1350, gift: null },
+      cosmed:   { price: 1350, prev: 1500, gift: '贈化妝包' },
+      momo:     { price: 1280, prev: 1350, gift: null },
+    },
+    {
+      id: 4, name: 'MAC 子彈唇膏 Ruby Woo', brand: 'M·A·C', category: 'makeup', emoji: '💋',
+      watsons:  { price: 880, prev: 980, gift: null },
+      cosmed:   { price: 900, prev: 900, gift: null },
+      momo:     { price: 860, prev: 900, gift: null },
+    },
+    {
+      id: 5, name: '雪花秀 時花秀顏霜 60ml', brand: 'Sulwhasoo', category: 'skincare', emoji: '🌸',
+      watsons:  { price: 5800, prev: 5800, gift: '贈潤顏霜 5ml' },
+      cosmed:   { price: 5600, prev: 5800, gift: null },
+      momo:     { price: 5500, prev: 5800, gift: null },
+    },
+  ];
+
+  const ALERTS = [
+    { id: 1, type: 'drop', icon: '↓', iconClass: 'ai-red',    title: 'SK-II 神仙水 MOMO 降價 12%', platform: 'MOMO', platformClass: 'pb-momo', diff: '-$480', diffClass: 'neg', time: '03:12', unread: true, critical: true },
+    { id: 2, type: 'drop', icon: '↓', iconClass: 'ai-red',    title: '蘭蔻小黑瓶 康是美降價 11%',   platform: '康是美', platformClass: 'pb-cosmed', diff: '-$400', diffClass: 'neg', time: '03:09', unread: true, critical: false },
+    { id: 3, type: 'gift', icon: '🎁', iconClass: 'ai-violet', title: '蘭蔻小黑瓶 屈臣氏新增贈品',   platform: '屈臣氏', platformClass: 'pb-watsons', diff: '+贈品', diffClass: 'pos', time: '02:00', unread: true, critical: false },
+    { id: 4, type: 'drop', icon: '↓', iconClass: 'ai-red',    title: 'MAC Ruby Woo 屈臣氏降價 10%', platform: '屈臣氏', platformClass: 'pb-watsons', diff: '-$100', diffClass: 'neg', time: '昨日', unread: false, critical: false },
+    { id: 5, type: 'gift', icon: '🎁', iconClass: 'ai-violet', title: 'YSL #1966 康是美新增贈品',     platform: '康是美', platformClass: 'pb-cosmed', diff: '+贈品', diffClass: 'pos', time: '昨日', unread: false, critical: false },
+  ];
+
+  // Trend data (30 days)
+  const TREND_DATA = [
+    { // SK-II
+      watsons: [3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960],
+      cosmed:  [3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960,3960],
+      momo:    [3960,3960,3960,3960,3960,3960,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3800,3600,3600,3600,3600,3600,3480,3480],
+    },
+    { // Lancôme
+      watsons: [3600,3600,3600,3600,3600,3600,3600,3600,3400,3400,3400,3400,3400,3400,3400,3400,3400,3400,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200],
+      cosmed:  [3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3600,3200,3200],
+      momo:    [3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3200,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,2980,2980,2980],
+    },
+    { // YSL
+      watsons: [1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350],
+      cosmed:  [1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1500,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350],
+      momo:    [1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1350,1280,1280],
+    },
+    { // MAC
+      watsons: [980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,980,880,880],
+      cosmed:  [900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900],
+      momo:    [900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,900,860,860,860,860,860,860,860,860],
+    },
+  ];
+
+  // ── Clock ──────────────────────────────────────────────
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('currentTime').textContent =
+      now.toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+  }
+  updateClock(); setInterval(updateClock, 60000);
+
+  // ── Render Price Table ─────────────────────────────────
+  function renderTable(filter='all', category='all') {
+    const tbody = document.getElementById('priceTableBody');
+    let rows = '';
+    PRODUCTS
+      .filter(p => category === 'all' || p.category === category)
+      .filter(p => {
+        if (filter === 'drops') return [p.watsons,p.cosmed,p.momo].some(pl => pl.price < pl.prev);
+        if (filter === 'gifts') return [p.watsons,p.cosmed,p.momo].some(pl => pl.gift);
+        return true;
+      })
+      .forEach(p => {
+        const prices = [p.watsons.price, p.cosmed.price, p.momo.price];
+        const minP = Math.min(...prices);
+        const maxP = Math.max(...prices);
+
+        const pCell = (pl, label) => {
+          const isMin = pl.price === minP;
+          const isMax = pl.price === maxP;
+          const changed = pl.price !== pl.prev;
+          const pct = changed ? ((pl.price - pl.prev) / pl.prev * 100).toFixed(1) : null;
+          return `<td class="price-cell">
+            <div class="price-num ${isMin?'lowest':isMax?'highest':''}">${pl.price === 0 ? '—' : 'NT$' + pl.price.toLocaleString()}</div>
+            ${changed ? `<div class="price-change ${pl.price < pl.prev ? 'down':'up'}">${pl.price<pl.prev?'▼':'▲'} ${Math.abs(pct)}%</div>` : ''}
+          </td>`;
+        };
+
+        const lowestPlatform = ['watsons','cosmed','momo'][prices.indexOf(minP)];
+        const lpLabel = { watsons: '屈臣氏', cosmed: '康是美', momo: 'MOMO' };
+        const lpClass = { watsons: 'pb-watsons', cosmed: 'pb-cosmed', momo: 'pb-momo' };
+
+        const giftHtml = [
+          p.watsons.gift ? `<span class="gift-tag">屈 ${p.watsons.gift}</span>` : '',
+          p.cosmed.gift  ? `<span class="gift-tag">康 ${p.cosmed.gift}</span>` : '',
+          p.momo.gift    ? `<span class="gift-tag">M ${p.momo.gift}</span>` : '',
+        ].join('') || '<span style="color:var(--text-muted);font-size:11px">—</span>';
+
+        rows += `<tr>
+          <td>
+            <div class="product-cell">
+              <div class="product-img">${p.emoji}</div>
+              <div>
+                <div class="product-name">${p.name}</div>
+                <div class="product-brand">${p.brand}</div>
+              </div>
+            </div>
+          </td>
+          ${pCell(p.watsons, '屈臣氏')}
+          ${pCell(p.cosmed,  '康是美')}
+          ${pCell(p.momo,    'MOMO')}
+          <td class="price-cell">
+            <div class="price-num lowest">NT$${minP.toLocaleString()}</div>
+            <div style="margin-top:3px"><span class="platform-badge ${lpClass[lowestPlatform]}">${lpLabel[lowestPlatform]}</span></div>
+          </td>
+          <td>${giftHtml}</td>
+        </tr>`;
+      });
+    tbody.innerHTML = rows;
+  }
+
+  let currentFilter = 'all', currentCategory = 'all';
+  function setTab(el, filter) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    currentFilter = filter;
+    renderTable(filter, currentCategory);
+  }
+  function filterCategory(cat) {
+    currentCategory = cat;
+    renderTable(currentFilter, cat);
+  }
+
+  // ── Render Alerts ──────────────────────────────────────
+  function renderAlerts() {
+    const list = document.getElementById('alertList');
+    const badge = document.getElementById('alertBadge');
+    const unread = ALERTS.filter(a => a.unread).length;
+    badge.textContent = unread;
+    badge.style.display = unread > 0 ? '' : 'none';
+
+    list.innerHTML = ALERTS.map(a => `
+      <div class="alert-item ${a.unread ? 'unread':''} ${a.critical ? 'critical':''}">
+        <div class="alert-icon ${a.iconClass}">${a.icon}</div>
+        <div class="alert-body">
+          <div class="alert-title">${a.title}</div>
+          <div class="alert-meta">
+            <span class="platform-badge ${a.platformClass}">${a.platform}</span>
+            <span class="alert-diff ${a.diffClass}">${a.diff}</span>
+            <span class="alert-time">${a.time}</span>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  function markAllRead() {
+    ALERTS.forEach(a => a.unread = false);
+    renderAlerts();
+    document.getElementById('kpiAlerts').textContent = '0';
+  }
+
+  // ── Chart ──────────────────────────────────────────────
+  let trendChartInstance;
+
+  function generateLabels() {
+    const labels = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      labels.push(`${d.getMonth()+1}/${d.getDate()}`);
+    }
+    return labels;
+  }
+
+  function initChart() {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    const idx = parseInt(document.getElementById('trendProduct').value);
+    const d = TREND_DATA[idx];
+
+    trendChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: generateLabels(),
+        datasets: [
+          { label: '屈臣氏', data: d.watsons, borderColor: '#00a0e3', backgroundColor: '#00a0e310', tension: 0.4, pointRadius: 0, borderWidth: 2, fill: false },
+          { label: '康是美', data: d.cosmed,  borderColor: '#f47920', backgroundColor: '#f4792010', tension: 0.4, pointRadius: 0, borderWidth: 2, fill: false },
+          { label: 'MOMO',   data: d.momo,    borderColor: '#e83750', backgroundColor: '#e8375010', tension: 0.4, pointRadius: 0, borderWidth: 2, fill: true  },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#13102299',
+            titleColor: '#f0e8ff', bodyColor: '#9d8fba',
+            borderColor: '#2a2245', borderWidth: 1,
+            callbacks: {
+              label: ctx => ` NT$${ctx.raw.toLocaleString()}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#5c5075', font: { family: 'DM Mono', size: 10 }, maxTicksLimit: 8 },
+            grid:  { color: '#ffffff08' }
+          },
+          y: {
+            ticks: { color: '#5c5075', font: { family: 'DM Mono', size: 10 }, callback: v => 'NT$' + v.toLocaleString() },
+            grid:  { color: '#ffffff08' }
+          }
+        }
+      }
+    });
+  }
+
+  function updateChart() {
+    const idx = parseInt(document.getElementById('trendProduct').value);
+    const d = TREND_DATA[idx];
+    trendChartInstance.data.datasets[0].data = d.watsons;
+    trendChartInstance.data.datasets[1].data = d.cosmed;
+    trendChartInstance.data.datasets[2].data = d.momo;
+    trendChartInstance.update('active');
+  }
+
+  // ── Nav ────────────────────────────────────────────────
+  function setNav(el, page) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // ── Simulate Scrape ────────────────────────────────────
+  function simulateScrape() {
+    const dot = document.getElementById('statusDot');
+    const txt = document.getElementById('statusText');
+    dot.classList.remove('idle'); txt.textContent = '爬蟲運行中';
+    const log = document.getElementById('logStrip');
+    log.innerHTML = '<span style="color:var(--amethyst)">⟳</span><span style="color:var(--text-secondary); font-size:11px">正在執行全平台爬取…</span>';
+    setTimeout(() => {
+      dot.classList.add('idle'); txt.textContent = '閒置中';
+      log.innerHTML = `
+        <span class="log-entry"><span class="ts">${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2,'0')}</span><span class="ok">✓</span> 屈臣氏 18/18</span>
+        <span style="color:#2a2245">│</span>
+        <span class="log-entry"><span class="ts">+4m</span><span class="ok">✓</span> 康是美 18/18</span>
+        <span style="color:#2a2245">│</span>
+        <span class="log-entry"><span class="ts">+8m</span><span class="ok">✓</span> MOMO 18/18</span>
+        <span style="color:#2a2245">│</span>
+        <span class="log-entry"><span class="ts">+10m</span><span class="ok">✓</span> 完成 · 0 筆異動</span>`;
+    }, 2800);
+  }
+
+  // ── LINE Test ──────────────────────────────────────────
+  function testLine() {
+    const token = document.getElementById('lineToken').value;
+    if (!token) { alert('請先輸入 LINE Channel Access Token'); return; }
+    alert('✅ 測試訊息已發送！請查看您的 LINE 群組。');
+  }
+
+  function saveSettings() {
+    alert('✅ LINE 通知設定已儲存');
+  }
+
+  // ── Init ───────────────────────────────────────────────
+  renderTable();
+  renderAlerts();
+  initChart();
+  </script>
+</body>
+</html>

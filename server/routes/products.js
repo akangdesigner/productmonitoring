@@ -38,6 +38,51 @@ router.put('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// PATCH /api/products/:id — 更新商品基本資料（名稱、品牌、品類、圖片、自訂售價）
+router.patch('/:id', (req, res) => {
+  const db = getDB();
+  const { name, brand, category, emoji, image_url, own_price } = req.body;
+  const p = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+  if (!p) return res.status(404).json({ error: '找不到商品' });
+  db.prepare(`
+    UPDATE products SET
+      name       = ?,
+      brand      = ?,
+      category   = ?,
+      emoji      = ?,
+      image_url  = ?,
+      own_price  = ?,
+      updated_at = datetime('now','localtime')
+    WHERE id = ?
+  `).run(
+    name      ?? p.name,
+    brand     ?? p.brand,
+    category  ?? p.category,
+    emoji     ?? p.emoji,
+    image_url !== undefined ? (image_url || null) : p.image_url,
+    own_price !== undefined ? (own_price  || null) : p.own_price,
+    req.params.id
+  );
+  res.json({ ok: true });
+});
+
+// PATCH /api/products/:id/star — 切換重點商品
+router.patch('/:id/star', (req, res) => {
+  const db = getDB();
+  const p = db.prepare('SELECT is_starred FROM products WHERE id = ?').get(req.params.id);
+  if (!p) return res.status(404).json({ error: '找不到商品' });
+  const next = p.is_starred ? 0 : 1;
+  db.prepare('UPDATE products SET is_starred = ? WHERE id = ?').run(next, req.params.id);
+  res.json({ ok: true, is_starred: next });
+});
+
+// DELETE /api/products/all — 清空全部商品（軟刪除）
+router.delete('/all', (req, res) => {
+  const db = getDB();
+  const result = db.prepare('UPDATE products SET is_active = 0 WHERE is_active = 1').run();
+  res.json({ ok: true, deleted: result.changes });
+});
+
 // DELETE /api/products/:id
 router.delete('/:id', (req, res) => {
   const db = getDB();

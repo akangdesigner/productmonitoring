@@ -57,15 +57,15 @@ function buildPriceDropFlex({ productName, brand, platform, oldPrice, newPrice }
           {
             type: 'box', layout: 'horizontal', margin: 'md',
             contents: [
-              { type: 'text', text: '原價', size: 'sm', color: '#5c5075' },
-              { type: 'text', text: `NT$${oldPrice.toLocaleString()}`, size: 'sm', align: 'end', decoration: 'line-through', color: '#5c5075' },
+              { type: 'text', text: '原價', size: 'sm', color: '#5c5075', flex: 1 },
+              { type: 'text', text: `NT$${oldPrice.toLocaleString()}`, size: 'sm', align: 'end', decoration: 'line-through', color: '#5c5075', flex: 2, wrap: true },
             ]
           },
           {
             type: 'box', layout: 'horizontal', margin: 'xs',
             contents: [
-              { type: 'text', text: '現價', size: 'lg', weight: 'bold', color: '#f0e8ff' },
-              { type: 'text', text: `NT$${newPrice.toLocaleString()}`, size: 'lg', weight: 'bold', align: 'end', color: '#ff4d6d' },
+              { type: 'text', text: '現價', size: 'lg', weight: 'bold', color: '#f0e8ff', flex: 1 },
+              { type: 'text', text: `NT$${newPrice.toLocaleString()}`, size: 'lg', weight: 'bold', align: 'end', color: '#ff4d6d', flex: 2, wrap: true },
             ]
           },
           {
@@ -141,24 +141,24 @@ function buildDailyReportFlex(products) {
     const lowestPf = minPrice ? Object.keys(platformMap).find(k => p[k] === minPrice) : null;
 
     return {
-      type: 'bubble', size: 'nano',
+      type: 'bubble', size: 'micro',
       body: {
         type: 'box', layout: 'vertical', spacing: 'xs', paddingAll: '12px',
         contents: [
           { type: 'text', text: p.brand || '品牌', size: 'xxs', color: '#9d8fba' },
-          { type: 'text', text: p.name, size: 'xs', weight: 'bold', wrap: true, color: '#f0e8ff', maxLines: 2 },
+          { type: 'text', text: p.name, size: 'xs', weight: 'bold', wrap: true, color: '#f0e8ff' },
           { type: 'separator', margin: 'sm', color: '#2a2245' },
           {
             type: 'box', layout: 'horizontal', margin: 'sm',
             contents: [
-              { type: 'text', text: '最低', size: 'xs', color: '#5c5075' },
-              { type: 'text', text: minPrice ? `NT$${minPrice.toLocaleString()}` : '—', size: 'xs', weight: 'bold', align: 'end', color: '#4ade80' }
+              { type: 'text', text: '最低', size: 'xs', color: '#5c5075', flex: 1 },
+              { type: 'text', text: minPrice ? `NT$${minPrice.toLocaleString()}` : '—', size: 'xs', weight: 'bold', align: 'end', color: '#4ade80', flex: 2, wrap: true }
             ]
           },
           {
             type: 'text',
             text: lowestPf ? platformMap[lowestPf] : '',
-            size: 'xxs', color: '#9d8fba', align: 'end'
+            size: 'xxs', color: '#9d8fba', align: 'end', wrap: true
           }
         ]
       },
@@ -174,14 +174,14 @@ function buildDailyReportFlex(products) {
       contents: [
         // 標題卡
         {
-          type: 'bubble', size: 'nano',
+          type: 'bubble', size: 'micro',
           body: {
             type: 'box', layout: 'vertical', justifyContent: 'center',
             paddingAll: '12px', spacing: 'xs',
             contents: [
               { type: 'text', text: '📊', size: 'xl', align: 'center' },
-              { type: 'text', text: '每日競品早報', weight: 'bold', align: 'center', color: '#f0e8ff', size: 'sm' },
-              { type: 'text', text: now, size: 'xxs', color: '#5c5075', align: 'center', margin: 'xs' },
+              { type: 'text', text: '每日競品早報', weight: 'bold', align: 'center', color: '#f0e8ff', size: 'sm', wrap: true },
+              { type: 'text', text: now, size: 'xxs', color: '#5c5075', align: 'center', margin: 'xs', wrap: true },
             ]
           },
           styles: { body: { backgroundColor: '#0d0b1a' } }
@@ -233,7 +233,7 @@ const LineService = {
           type: 'box', layout: 'horizontal', margin: 'xs',
           contents: [
             { type: 'text', text: PF_LABEL[pf], size: 'xs', color: PF_COLOR[pf], flex: 1 },
-            { type: 'text', text: `NT$${g[pf].toLocaleString()}`, size: 'xs', align: 'end', flex: 2,
+            { type: 'text', text: `NT$${g[pf].toLocaleString()}`, size: 'xs', align: 'end', flex: 2, wrap: true,
               color: g[pf] === g.min ? '#4ade80' : '#f0e8ff', weight: g[pf] === g.min ? 'bold' : 'regular' },
           ]
         }));
@@ -244,7 +244,7 @@ const LineService = {
           type: 'box', layout: 'vertical', spacing: 'xs', paddingAll: '12px',
           contents: [
             { type: 'text', text: g.brand || '', size: 'xxs', color: '#9d8fba' },
-            { type: 'text', text: g.name, size: 'xs', weight: 'bold', wrap: true, color: '#f0e8ff', maxLines: 2 },
+            { type: 'text', text: g.name, size: 'xs', weight: 'bold', wrap: true, color: '#f0e8ff' },
             { type: 'separator', margin: 'sm', color: '#2a2245' },
             ...rows,
             {

@@ -154,6 +154,29 @@ async function initDB() {
   try { db.exec("ALTER TABLE products ADD COLUMN base_name TEXT") } catch {}
   try { db.exec("ALTER TABLE products ADD COLUMN variant TEXT") } catch {}
 
+  // ── 遷移：加入 is_starred 欄位 ──
+  try { db.exec("ALTER TABLE products ADD COLUMN is_starred INTEGER DEFAULT 0") } catch {}
+
+  // ── 遷移：加入 image_url、own_price 欄位 ──
+  try { db.exec("ALTER TABLE products ADD COLUMN image_url TEXT") } catch {}
+  try { db.exec("ALTER TABLE products ADD COLUMN own_price REAL") } catch {}
+
+  // ── 我的商品目錄（與競品監控完全獨立）──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS client_products (
+      id         TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      brand      TEXT,
+      category   TEXT DEFAULT 'skincare',
+      image_url  TEXT,
+      price      REAL,
+      note       TEXT,
+      is_active  INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+  `);
+
   return db;
 }
 

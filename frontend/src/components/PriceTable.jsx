@@ -50,12 +50,15 @@ function groupProducts(products) {
   })
 }
 
-export default function PriceTable({ products }) {
+export default function PriceTable({ products, onDelete, onStar, onAdd }) {
   const [filter, setFilter] = useState('all')
   const [category, setCategory] = useState('all')
+  const [keyword, setKeyword] = useState('')
+
+  const kw = keyword.trim().toLowerCase()
 
   const filtered = products
-    .filter(p => category === 'all' || p.category === category)
+    .filter(p => category === 'all' || (category === 'starred' ? p.is_starred : p.category === category))
     .filter(p => {
       if (filter === 'drops') {
         return ['watsons', 'cosmed', 'poya'].some(k =>
@@ -64,16 +67,39 @@ export default function PriceTable({ products }) {
       }
       return true
     })
+    .filter(p => {
+      if (!kw) return true
+      return (p.name || '').toLowerCase().includes(kw) || (p.brand || '').toLowerCase().includes(kw)
+    })
 
   const groups = groupProducts(filtered)
 
   return (
     <div>
       <div className="section-header">
-        <div className="section-title">即時比價總覽</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="section-title">即時比價總覽</div>
+          <input
+            type="text"
+            placeholder="搜尋商品或品牌…"
+            value={keyword}
+            onChange={e => setKeyword(e.target.value)}
+            style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)',
+              borderRadius: 6, padding: '4px 10px', fontSize: 12,
+              color: 'var(--text-primary)', outline: 'none', width: 160,
+            }}
+          />
+        </div>
         <div className="section-actions">
-          <select className="select-styled" onChange={e => setCategory(e.target.value)}>
+          {onAdd && (
+            <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }} onClick={onAdd}>
+              ✦ 新增監控商品
+            </button>
+          )}
+          <select className="select-styled" value={category} onChange={e => setCategory(e.target.value)}>
             <option value="all">全部品類</option>
+            <option value="starred">⭐ 重點商品</option>
             <option value="skincare">保養</option>
             <option value="makeup">彩妝</option>
             <option value="唇膏">唇膏</option>
@@ -99,6 +125,7 @@ export default function PriceTable({ products }) {
               ))}
               <th className="platform-col" style={{ color: 'var(--text-primary)' }}>最低價</th>
               <th style={{ minWidth: 160 }}>備註</th>
+              <th style={{ width: 48 }} />
             </tr>
           </thead>
           <tbody>
@@ -140,6 +167,26 @@ export default function PriceTable({ products }) {
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
                         共 {merged.variantCount} 種色號
                       </div>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    {onStar && (
+                      <button
+                        onClick={() => onStar(rep.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, padding: '4px 5px', borderRadius: 4, lineHeight: 1, color: rep.is_starred ? '#facc15' : 'var(--text-muted)' }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#facc15'}
+                        onMouseLeave={e => e.currentTarget.style.color = rep.is_starred ? '#facc15' : 'var(--text-muted)'}
+                        title={rep.is_starred ? '取消重點' : '加入重點'}
+                      >{rep.is_starred ? '★' : '☆'}</button>
+                    )}
+                    {onDelete && (
+                      <button
+                        onClick={() => onDelete(rep.id, key)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 15, padding: '4px 5px', borderRadius: 4, lineHeight: 1 }}
+                        onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                        title="刪除商品"
+                      >✕</button>
                     )}
                   </td>
                 </tr>

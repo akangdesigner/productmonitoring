@@ -20,7 +20,8 @@ app.use('/api/gifts',     require('./routes/gifts'));
 app.use('/api/alerts',    require('./routes/alerts'));
 app.use('/api/scraper',   require('./routes/scraper'));
 app.use('/api/line',      require('./routes/line'));
-app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/dashboard',    require('./routes/dashboard'));
+app.use('/api/my-products', require('./routes/clientProducts'));
 
 // ── 全域錯誤處理 ──
 app.use((err, req, res, next) => {

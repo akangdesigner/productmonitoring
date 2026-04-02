@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export default function Header({ onScrape, onAddProduct, scraping }) {
+export default function Header() {
   const [time, setTime] = useState('')
 
   useEffect(() => {
@@ -23,16 +23,6 @@ export default function Header({ onScrape, onAddProduct, scraping }) {
           <span>{time}</span>
           最後更新
         </div>
-        <button
-          className={`btn btn-ghost${scraping ? ' loading' : ''}`}
-          onClick={onScrape}
-          disabled={scraping}
-        >
-          ↻ 立即抓取
-        </button>
-        <button className="btn btn-primary" onClick={onAddProduct}>
-          ✦ 新增商品
-        </button>
       </div>
     </header>
   )

@@ -11,11 +11,8 @@ class AlertService {
     const changePercent = ((newPrice - oldPrice) / oldPrice) * 100;
     const db = getDB();
 
-    // 讀取 LINE 設定的觸發門檻
-    const settings = db.prepare('SELECT price_drop_threshold FROM line_settings WHERE id = 1').get();
+    const settings = db.prepare('SELECT notify_price_drop, price_drop_threshold FROM line_settings WHERE id = 1').get();
     const threshold = settings?.price_drop_threshold ?? 5;
-
-    if (Math.abs(changePercent) < threshold) return;
 
     const type    = newPrice < oldPrice ? 'price_drop' : 'price_surge';
     const emoji   = newPrice < oldPrice ? '📉' : '📈';
@@ -31,8 +28,8 @@ class AlertService {
 
     logger.info(`[警示] 建立: ${title}`);
 
-    // 降價時推播 LINE Flex Message
-    if (type === 'price_drop') {
+    // 降價時推播 LINE Flex Message（需開啟通知且跌幅達門檻）
+    if (type === 'price_drop' && settings?.notify_price_drop && Math.abs(changePercent) >= threshold) {
       await LineService.sendPriceDropAlert({
         productName: product.name,
         brand:       product.brand || '',

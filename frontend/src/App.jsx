@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, checkBackend } from './api'
-import { MOCK_PRODUCTS, MOCK_ALERTS } from './mockData'
+import { api, apiFetch, checkBackend } from './api'
 import { useToast, ToastContainer } from './components/Toast'
 import Sidebar        from './components/Sidebar'
 import Header         from './components/Header'
@@ -12,26 +11,20 @@ import AlertFeed      from './components/AlertFeed'
 import AlertRecordsPage from './components/AlertRecordsPage'
 import LineSettings   from './components/LineSettings'
 import ScraperPage    from './components/ScraperPage'
+import ProductsPage   from './components/ProductsPage'
 import AddProductModal from './components/AddProductModal'
 
-const DEFAULT_LOG = [
-  { ts:'03:00', ok:true,  msg:'屈臣氏 完成' },
-  { ts:'03:04', ok:true,  msg:'康是美 完成' },
-  { ts:'03:09', ok:true,  msg:'寶雅 完成' },
-  { ts:'03:12', ok:true,  msg:'全部完成 · 3 筆異動' },
-]
+const DEFAULT_LOG = []
 
 export default function App() {
   const { toasts, toast } = useToast()
 
   const [isOnline,    setIsOnline]    = useState(false)
   const [activeNav,   setActiveNav]   = useState('dashboard')
-  const [products,    setProducts]    = useState(MOCK_PRODUCTS)
-  const [alerts,      setAlerts]      = useState(MOCK_ALERTS)
+  const [products,    setProducts]    = useState([])
+  const [alerts,      setAlerts]      = useState([])
   const [kpi,         setKpi]         = useState({})
   const [log,         setLog]         = useState(DEFAULT_LOG)
-  const [scraping,    setScraping]    = useState(false)
-  const [scraperIdle, setScraperIdle] = useState(true)
   const [showModal,   setShowModal]   = useState(false)
   const [gapTotal,    setGapTotal]    = useState(0)
 
@@ -64,33 +57,26 @@ export default function App() {
     return () => clearInterval(t)
   }, [refresh])
 
-  async function handleScrape() {
-    setScraping(true)
-    setScraperIdle(false)
-    setLog([{ ts: '', ok: true, msg: '正在執行全平台爬取…' }])
-
-    if (isOnline) {
-      try {
-        const result = await api.runScraper()
-        const now = new Date()
-        const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
-        setLog([
-          { ts: hhmm, ok: true,           msg: `爬取完成` },
-          { ts: '',   ok: true,           msg: `成功 ${result.scraped} 筆` },
-          { ts: '',   ok: result.errors===0, msg: `失敗 ${result.errors} 筆` },
-        ])
-        toast(`爬取完成：${result.scraped} 筆成功`, result.errors > 0 ? 'info' : 'success')
-        await refresh()
-      } catch (err) {
-        toast(`爬蟲失敗：${err.message}`, 'error')
-        setLog([{ ts: '', ok: false, msg: `失敗：${err.message}` }])
-      }
-    } else {
-      await new Promise(r => setTimeout(r, 2000))
-      setLog([{ ts: '', ok: true, msg: '（示範模式）後端未啟動' }])
+  async function handleStar(id) {
+    if (!isOnline) { toast('⚠ 後端離線', 'error'); return }
+    try {
+      const res = await api.starProduct(id)
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, is_starred: res.is_starred } : p))
+    } catch (err) {
+      toast(`操作失敗：${err.message}`, 'error')
     }
-    setScraping(false)
-    setScraperIdle(true)
+  }
+
+  async function handleDelete(id, name) {
+    if (!isOnline) { toast('⚠ 後端離線，無法刪除', 'error'); return }
+    if (!window.confirm(`確定要刪除「${name}」嗎？`)) return
+    try {
+      await api.deleteProduct(id)
+      toast(`已刪除「${name}」`, 'success')
+      await refresh()
+    } catch (err) {
+      toast(`刪除失敗：${err.message}`, 'error')
+    }
   }
 
   async function handleMarkAllRead() {
@@ -133,18 +119,16 @@ export default function App() {
             setActiveNav(key)
           }}
           unreadCount={newGapCount}
-          scraperIdle={scraperIdle}
+
         />
 
-        <Header
-          onScrape={handleScrape}
-          onAddProduct={() => setShowModal(true)}
-          scraping={scraping}
-        />
+        <Header />
 
         <main className="main">
           {activeNav === 'scraper' ? (
             <ScraperPage isOnline={isOnline} toast={toast} />
+          ) : activeNav === 'products' ? (
+            <ProductsPage isOnline={isOnline} toast={toast} />
           ) : activeNav === 'alerts' ? (
             <AlertRecordsPage isOnline={isOnline} toast={toast} />
           ) : activeNav === 'line' ? (
@@ -153,7 +137,7 @@ export default function App() {
             <>
               <KPICards kpi={{ ...kpi, unreadAlerts: newGapCount }} />
               <LogStrip log={log} />
-              <PriceTable products={products} />
+              <PriceTable products={products} onDelete={handleDelete} onStar={handleStar} onAdd={() => setShowModal(true)} />
               <div className="mid-grid">
                 <TrendChart products={products} isOnline={isOnline} />
                 <AlertFeed alerts={alerts} onMarkAllRead={handleMarkAllRead} />

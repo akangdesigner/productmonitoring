@@ -6,6 +6,8 @@ const cron     = require('node-cron');
 const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../db');
 const { runScrapeJob } = require('../jobs/scheduledScrape');
+const AlertService = require('../services/AlertService');
+const logger = require('../utils/logger');
 
 // ── 排程設定存檔路徑 ──
 const SCHEDULE_FILE = path.join(__dirname, '../scraper-schedule.json');
@@ -44,16 +46,25 @@ function applySchedule(s) {
   const [hh, mm] = s.time.split(':');
   const expr = `${mm} ${hh} * * ${daysToCron(s.days)}`;
   currentCronJob = cron.schedule(expr, async () => {
-    const enabledUrls = s.urls.filter(u => u.enabled);
+    const current = loadSchedule(); // 每次觸發重新讀設定，確保取得最新 URL 清單
+    const enabledUrls = current.urls.filter(u => u.enabled);
+    logger.info(`[排程] 啟動分類頁爬取，共 ${enabledUrls.length} 個 URL`);
+
     for (const item of enabledUrls) {
+      const db = getDB();
+      const jobId = uuidv4();
+      db.prepare('INSERT INTO scrape_jobs (id, platform, target_url) VALUES (?, ?, ?)').run(jobId, item.platform, item.url);
+
       try {
         const scraped = await scrapeCategoryPage(item.url, item.platform);
-        const result  = matchAndUpdate(scraped, item.platform, item.url);
-        const db = getDB();
-        db.prepare(`UPDATE scrape_jobs SET status='success', products_scraped=?, finished_at=datetime('now','localtime') WHERE target_url=? AND status='running'`)
-          .run(result.total, item.url);
+        const result  = await matchAndUpdate(scraped, item.platform);
+        db.prepare(`UPDATE scrape_jobs SET status='success', products_scraped=?, finished_at=datetime('now','localtime') WHERE id=?`)
+          .run(result.total, jobId);
+        logger.info(`[排程] ${item.platform} 完成：新增 ${result.added}，更新 ${result.updated}，共 ${result.total} 筆`);
       } catch (err) {
-        console.error(`[排程爬取失敗] ${item.url}:`, err.message);
+        db.prepare(`UPDATE scrape_jobs SET status='failed', error_detail=?, finished_at=datetime('now','localtime') WHERE id=?`)
+          .run(err.message, jobId);
+        logger.error(`[排程] 爬取失敗 ${item.url}: ${err.message}`);
       }
     }
   }, { timezone: 'Asia/Taipei' });
@@ -241,9 +252,9 @@ async function scrapeCategoryPage(url, platform) {
 }
 
 // ── 比對 & 更新資料庫，回傳價格異動清單 ──
-function matchAndUpdate(scrapedProducts, platform) {
+async function matchAndUpdate(scrapedProducts, platform) {
   const db = getDB();
-  const existing = db.prepare('SELECT id, name, base_name, variant FROM products').all();
+  const existing = db.prepare('SELECT id, name, base_name, variant, brand FROM products').all();
 
   const insertPrice = db.prepare(`
     INSERT INTO price_records (id, product_id, platform, price, original_price, discount_label, in_stock)
@@ -252,6 +263,7 @@ function matchAndUpdate(scrapedProducts, platform) {
 
   let added = 0, updated = 0;
   const priceChanges = [];
+  const alertQueue = []; // 收集需要觸發警示的變動，transaction 外再處理
 
   db.transaction(() => {
     for (const item of scrapedProducts) {
@@ -268,7 +280,6 @@ function matchAndUpdate(scrapedProducts, platform) {
         if (score > bestScore) { bestScore = score; best = ep; }
       }
 
-      const bestBase    = best ? (best.base_name || extractBaseName(best.name)) : null;
       const bestVariant = best ? best.variant : null;
       const variantMatch = itemVariant === bestVariant ||
                            (itemVariant ?? '').toLowerCase() === (bestVariant ?? '').toLowerCase();
@@ -281,6 +292,7 @@ function matchAndUpdate(scrapedProducts, platform) {
           const diff = item.price - latest.price;
           const pct  = ((diff / latest.price) * 100).toFixed(1);
           priceChanges.push(`${item.name.slice(0,25)} $${latest.price}→$${item.price}（${diff>0?'+':''}${pct}%）`);
+          alertQueue.push({ product: { id: best.id, name: best.name, brand: best.brand || '' }, platform, newPrice: item.price, oldPrice: latest.price });
           updated++;
         } else if (!latest) {
           insertPrice.run(uuidv4(), best.id, platform, item.price, item.origPrice ?? null, null);
@@ -297,6 +309,12 @@ function matchAndUpdate(scrapedProducts, platform) {
       }
     }
   })();
+
+  // transaction 完成後再觸發警示（async 不能在 transaction 內）
+  for (const { product, platform: pf, newPrice, oldPrice } of alertQueue) {
+    await AlertService.checkPriceChange(product, pf, newPrice, oldPrice)
+      .catch(err => logger.warn(`[排程] 警示觸發失敗: ${err.message}`));
+  }
 
   return { total: scrapedProducts.length, added, updated, priceChanges };
 }

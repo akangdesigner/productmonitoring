@@ -44,9 +44,9 @@ router.get('/gaps', (req, res) => {
         AND pr.platform IN ('watsons','cosmed','poya')
     )
     SELECT
-      p.id   AS product_id,
-      p.name AS product_name,
-      p.brand,
+      COALESCE(p.base_name, p.name) AS group_key,
+      COALESCE(p.base_name, p.name) AS product_name,
+      MIN(p.brand) AS brand,
       MAX(CASE WHEN l.platform='watsons' THEN l.price END) AS watsons_price,
       MAX(CASE WHEN l.platform='cosmed'  THEN l.price END) AS cosmed_price,
       MAX(CASE WHEN l.platform='poya'    THEN l.price END) AS poya_price,
@@ -56,7 +56,7 @@ router.get('/gaps', (req, res) => {
     FROM products p
     LEFT JOIN latest l ON l.product_id = p.id AND l.rn = 1
     WHERE p.is_active = 1
-    GROUP BY p.id, p.name, p.brand
+    GROUP BY COALESCE(p.base_name, p.name)
   `).all();
 
   const gapRows = rows
@@ -76,7 +76,7 @@ router.get('/gaps', (req, res) => {
         .slice(-1)[0] || null;
 
       return {
-        product_id: r.product_id,
+        product_id: r.group_key,
         product_name: r.product_name,
         brand: r.brand,
         watsons_price: r.watsons_price ?? null,

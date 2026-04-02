@@ -49,7 +49,7 @@ export default function TrendChart({ products, isOnline }) {
               return map[d.toISOString().slice(0,10)] ?? null
             })
           }
-          setChartData({ watsons: toArr('watsons'), cosmed: toArr('cosmed'), momo: toArr('momo') })
+          setChartData({ watsons: toArr('watsons'), cosmed: toArr('cosmed'), poya: toArr('poya') })
           return
         } catch {}
       }
@@ -63,7 +63,7 @@ export default function TrendChart({ products, isOnline }) {
     datasets: [
       { label:'屈臣氏', data: chartData?.watsons ?? [], borderColor:'#00a0e3', backgroundColor:'#00a0e310', tension:0.4, pointRadius:0, borderWidth:2, fill:false },
       { label:'康是美', data: chartData?.cosmed  ?? [], borderColor:'#f47920', backgroundColor:'#f4792010', tension:0.4, pointRadius:0, borderWidth:2, fill:false },
-      { label:'MOMO',   data: chartData?.momo    ?? [], borderColor:'#e83750', backgroundColor:'#e8375010', tension:0.4, pointRadius:0, borderWidth:2, fill:true },
+      { label:'寶雅',   data: chartData?.poya    ?? [], borderColor:'#16a34a', backgroundColor:'#16a34a10', tension:0.4, pointRadius:0, borderWidth:2, fill:true },
     ]
   }
 
@@ -76,7 +76,7 @@ export default function TrendChart({ products, isOnline }) {
         </select>
       </div>
       <div className="chart-legend" style={{ marginTop: 14 }}>
-        {[['#00a0e3','屈臣氏'],['#f47920','康是美'],['#e83750','MOMO']].map(([color,label]) => (
+        {[['#00a0e3','屈臣氏'],['#f47920','康是美'],['#16a34a','寶雅']].map(([color,label]) => (
           <div key={label} className="legend-item">
             <div className="legend-dot" style={{ background: color }} />
             {label}

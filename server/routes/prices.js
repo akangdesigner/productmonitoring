@@ -48,7 +48,7 @@ router.get('/trend/:productId', (req, res) => {
   `).all(productId);
 
   // 轉換為前端 Chart.js 格式
-  const platforms = ['watsons', 'cosmed', 'momo'];
+  const platforms = ['watsons', 'cosmed', 'poya'];
   const result = {};
   platforms.forEach(pf => {
     result[pf] = rows.filter(r => r.platform === pf).map(r => ({ date: r.date, price: r.min_price }));

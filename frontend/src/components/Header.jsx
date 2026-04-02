@@ -16,7 +16,7 @@ export default function Header({ onScrape, onAddProduct, scraping }) {
     <header className="header">
       <div className="header-left">
         <h1>價格與贈品 <em>監控台</em></h1>
-        <p>監控屈臣氏・康是美・MOMO・競品官網｜即時比價・降價預警</p>
+        <p>監控屈臣氏・康是美・寶雅・競品官網｜即時比價・降價預警</p>
       </div>
       <div className="header-right">
         <div className="last-update">

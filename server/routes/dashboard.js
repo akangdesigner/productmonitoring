@@ -11,7 +11,7 @@ router.get('/kpi', (req, res) => {
   const unreadAlerts = db.prepare('SELECT COUNT(*) as n FROM alerts WHERE is_read = 0').get().n;
 
   // 各平台今日最低價商品數統計
-  const platforms = ['watsons', 'cosmed', 'momo'];
+  const platforms = ['watsons', 'cosmed', 'poya'];
   const lowestCounts = {};
   platforms.forEach(pf => {
     lowestCounts[pf] = db.prepare(`
@@ -30,13 +30,13 @@ router.get('/kpi', (req, res) => {
     `).get(pf).n;
   });
 
-  const lowestPlatform = Object.entries(lowestCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || 'momo';
+  const lowestPlatform = Object.entries(lowestCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || 'poya';
 
   res.json({
     productCount,
     todayAlerts,
     unreadAlerts,
-    lowestPlatform: { watsons:'屈臣氏', cosmed:'康是美', momo:'MOMO' }[lowestPlatform],
+    lowestPlatform: { watsons:'屈臣氏', cosmed:'康是美', poya:'寶雅' }[lowestPlatform],
   });
 });
 
@@ -79,7 +79,7 @@ router.get('/summary', (req, res) => {
       ...p,
       watsons: getPlatformData('watsons'),
       cosmed:  getPlatformData('cosmed'),
-      momo:    getPlatformData('momo'),
+      poya:    getPlatformData('poya'),
     };
   });
 

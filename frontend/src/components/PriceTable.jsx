@@ -1,18 +1,18 @@
 import { useState } from 'react'
 
-const PF_LABEL = { watsons: '屈臣氏', cosmed: '康是美', momo: 'MOMO' }
-const PF_SHORT = { watsons: '屈', cosmed: '康', momo: 'M' }
-const PF_CLASS = { watsons: 'pb-watsons', cosmed: 'pb-cosmed', momo: 'pb-momo' }
+const PF_LABEL = { watsons: '屈臣氏', cosmed: '康是美', poya: '寶雅' }
+const PF_CLASS = { watsons: 'pb-watsons', cosmed: 'pb-cosmed', poya: 'pb-poya' }
 
 function PriceCell({ pl, isMin, isMax }) {
   if (!pl?.price) return <td className="price-cell"><div className="price-num" style={{ color: 'var(--text-muted)' }}>—</div></td>
   const pct = pl.prevPrice && pl.price !== pl.prevPrice
     ? ((pl.price - pl.prevPrice) / pl.prevPrice * 100).toFixed(1)
     : null
+  const hasOrig = pl.originalPrice && pl.originalPrice > pl.price
   return (
     <td className="price-cell">
       <div className={`price-num${isMin ? ' lowest' : isMax ? ' highest' : ''}`}>
-        NT${pl.price.toLocaleString()}
+        NT${pl.price.toLocaleString()}{hasOrig ? `（原${pl.originalPrice.toLocaleString()}）` : ''}
       </div>
       {pct && (
         <div className={`price-change ${pl.price < pl.prevPrice ? 'down' : 'up'}`}>
@@ -23,6 +23,33 @@ function PriceCell({ pl, isMin, isMax }) {
   )
 }
 
+// 把同 base_name 的商品合併成一列（取各平台最低價）
+function groupProducts(products) {
+  const map = new Map()
+  for (const p of products) {
+    const key = p.base_name || p.name
+    if (!map.has(key)) map.set(key, [])
+    map.get(key).push(p)
+  }
+
+  return [...map.entries()].map(([key, items]) => {
+    if (items.length === 1) return { key, rep: items[0], merged: null }
+
+    // 多個色號 → 取代表商品欄位 + 各平台最低價
+    const rep = items[0]
+    const merged = {}
+    for (const pf of ['watsons', 'cosmed', 'poya']) {
+      const candidates = items.map(p => p[pf]).filter(pl => pl?.price > 0)
+      if (candidates.length === 0) { merged[pf] = null; continue }
+      const best = candidates.reduce((a, b) => a.price <= b.price ? a : b)
+      merged[pf] = best
+    }
+    merged.variantCount = items.length
+
+    return { key, rep, merged }
+  })
+}
+
 export default function PriceTable({ products }) {
   const [filter, setFilter] = useState('all')
   const [category, setCategory] = useState('all')
@@ -30,11 +57,15 @@ export default function PriceTable({ products }) {
   const filtered = products
     .filter(p => category === 'all' || p.category === category)
     .filter(p => {
-      const pfs = [p.watsons, p.cosmed, p.momo].filter(Boolean)
-      if (filter === 'drops') return pfs.some(pl => pl.price && pl.prevPrice && pl.price < pl.prevPrice)
-      if (filter === 'gifts') return pfs.some(pl => pl.gift)
+      if (filter === 'drops') {
+        return ['watsons', 'cosmed', 'poya'].some(k =>
+          p[k]?.price && p[k]?.prevPrice && p[k].price < p[k].prevPrice
+        )
+      }
       return true
     })
+
+  const groups = groupProducts(filtered)
 
   return (
     <div>
@@ -45,10 +76,11 @@ export default function PriceTable({ products }) {
             <option value="all">全部品類</option>
             <option value="skincare">保養</option>
             <option value="makeup">彩妝</option>
+            <option value="唇膏">唇膏</option>
             <option value="haircare">洗護</option>
           </select>
           <div className="tab-bar">
-            {[['all','全部'],['drops','降價中'],['gifts','有贈品']].map(([k,l]) => (
+            {[['all','全部'],['drops','降價中']].map(([k,l]) => (
               <button key={k} className={`tab${filter===k?' active':''}`} onClick={() => setFilter(k)}>{l}</button>
             ))}
           </div>
@@ -66,32 +98,35 @@ export default function PriceTable({ products }) {
                 </th>
               ))}
               <th className="platform-col" style={{ color: 'var(--text-primary)' }}>最低價</th>
-              <th>贈品活動</th>
+              <th style={{ minWidth: 160 }}>備註</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map(p => {
-              const prices = ['watsons','cosmed','momo'].map(k => p[k]?.price).filter(v => v > 0)
+            {groups.map(({ key, rep, merged }) => {
+              const pData = merged ?? {
+                watsons: rep.watsons,
+                cosmed:  rep.cosmed,
+                poya:    rep.poya,
+              }
+              const prices = ['watsons', 'cosmed', 'poya'].map(k => pData[k]?.price).filter(v => v > 0)
               const minP = prices.length ? Math.min(...prices) : 0
               const maxP = prices.length ? Math.max(...prices) : 0
-              const lowestPf = ['watsons','cosmed','momo'].find(k => p[k]?.price === minP)
-
-              const gifts = ['watsons','cosmed','momo'].filter(k => p[k]?.gift)
+              const lowestPf = ['watsons', 'cosmed', 'poya'].find(k => pData[k]?.price === minP)
 
               return (
-                <tr key={p.id}>
+                <tr key={key}>
                   <td>
                     <div className="product-cell">
-                      <div className="product-img">{p.emoji || '✨'}</div>
+                      <div className="product-img">{rep.emoji || '✨'}</div>
                       <div>
-                        <div className="product-name">{p.name}</div>
-                        <div className="product-brand">{p.brand}</div>
+                        <div className="product-name">{key}</div>
+                        <div className="product-brand">{rep.brand}</div>
                       </div>
                     </div>
                   </td>
-                  <PriceCell pl={p.watsons} isMin={p.watsons?.price === minP && minP > 0} isMax={p.watsons?.price === maxP && maxP > minP} />
-                  <PriceCell pl={p.cosmed}  isMin={p.cosmed?.price  === minP && minP > 0} isMax={p.cosmed?.price  === maxP && maxP > minP} />
-                  <PriceCell pl={p.momo}    isMin={p.momo?.price    === minP && minP > 0} isMax={p.momo?.price    === maxP && maxP > minP} />
+                  <PriceCell pl={pData.watsons} isMin={pData.watsons?.price === minP && minP > 0} isMax={pData.watsons?.price === maxP && maxP > minP} />
+                  <PriceCell pl={pData.cosmed}  isMin={pData.cosmed?.price  === minP && minP > 0} isMax={pData.cosmed?.price  === maxP && maxP > minP} />
+                  <PriceCell pl={pData.poya}    isMin={pData.poya?.price    === minP && minP > 0} isMax={pData.poya?.price    === maxP && maxP > minP} />
                   <td className="price-cell">
                     {minP > 0 ? <>
                       <div className="price-num lowest">NT${minP.toLocaleString()}</div>
@@ -101,10 +136,11 @@ export default function PriceTable({ products }) {
                     </> : '—'}
                   </td>
                   <td>
-                    {gifts.length > 0
-                      ? gifts.map(k => <span key={k} className="gift-tag">{PF_SHORT[k]} {p[k].gift}</span>)
-                      : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
-                    }
+                    {merged?.variantCount > 1 && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                        共 {merged.variantCount} 種色號
+                      </div>
+                    )}
                   </td>
                 </tr>
               )

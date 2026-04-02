@@ -2,7 +2,7 @@ export default function Sidebar({ activeNav, onNav, unreadCount, scraperIdle }) 
   const navItems = [
     { key: 'dashboard', icon: '◈', label: '監控儀表板' },
     { key: 'products',  icon: '◇', label: '商品管理' },
-    { key: 'alerts',    icon: '◉', label: '警示記錄', badge: unreadCount },
+    { key: 'alerts',    icon: '◉', label: '價差警示', badge: unreadCount },
     { key: 'trends',    icon: '◈', label: '趨勢分析' },
   ]
   const settingItems = [

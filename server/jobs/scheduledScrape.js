@@ -9,7 +9,7 @@ const logger = require('../utils/logger');
 const scrapers = {
   watsons: () => new (require('../scrapers/WatsonsScraper'))(),
   cosmed:  () => new (require('../scrapers/CosmedScraper'))(),
-  momo:    () => new (require('../scrapers/MomoScraper'))(),
+  poya:    () => new (require('../scrapers/PoyaScraper'))(),
 };
 
 async function runScrapeJob(platform = 'all') {

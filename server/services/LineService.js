@@ -2,17 +2,25 @@ const { Client } = require('@line/bot-sdk');
 const { getDB } = require('../db');
 const logger = require('../utils/logger');
 
+function getLineConfig() {
+  // 優先用環境變數，DB 作為備援
+  const token  = process.env.LINE_CHANNEL_ACCESS_TOKEN
+    || getDB().prepare('SELECT channel_access_token FROM line_settings WHERE id = 1').get()?.channel_access_token || '';
+  const secret = process.env.LINE_CHANNEL_SECRET
+    || getDB().prepare('SELECT channel_secret FROM line_settings WHERE id = 1').get()?.channel_secret || '';
+  const userId = process.env.LINE_USER_ID
+    || getDB().prepare('SELECT user_id FROM line_settings WHERE id = 1').get()?.user_id || '';
+  return { token, secret, userId };
+}
+
 function getClient() {
-  const db = getDB();
-  const s = db.prepare('SELECT channel_access_token, channel_secret FROM line_settings WHERE id = 1').get();
-  if (!s?.channel_access_token) return null;
-  return new Client({ channelAccessToken: s.channel_access_token, channelSecret: s.channel_secret });
+  const { token, secret } = getLineConfig();
+  if (!token) return null;
+  return new Client({ channelAccessToken: token, channelSecret: secret });
 }
 
 function getTargetUserId() {
-  const db = getDB();
-  const s = db.prepare('SELECT user_id FROM line_settings WHERE id = 1').get();
-  return s?.user_id || null;
+  return getLineConfig().userId || null;
 }
 
 // ── Flex Message 模板 ─────────────────────────────────
@@ -20,8 +28,8 @@ function getTargetUserId() {
 function buildPriceDropFlex({ productName, brand, platform, oldPrice, newPrice }) {
   const pct = (((newPrice - oldPrice) / oldPrice) * 100).toFixed(1);
   const saved = oldPrice - newPrice;
-  const platformColor = { watsons:'#00a0e3', cosmed:'#f47920', momo:'#e83750', pchome:'#cc0000' };
-  const platformLabel = { watsons:'屈臣氏', cosmed:'康是美', momo:'MOMO 購物網', pchome:'PChome 24h' };
+  const platformColor = { watsons:'#00a0e3', cosmed:'#f47920', poya:'#16a34a', pchome:'#cc0000' };
+  const platformLabel = { watsons:'屈臣氏', cosmed:'康是美', poya:'寶雅', pchome:'PChome 24h' };
   const pfColor = platformColor[platform] || '#9b6dca';
   const pfLabel = platformLabel[platform] || platform;
 
@@ -65,7 +73,8 @@ function buildPriceDropFlex({ productName, brand, platform, oldPrice, newPrice }
             backgroundColor: '#ff4d6d20',
             cornerRadius: '8px', paddingAll: '8px',
             contents: [
-              { type: 'text', text: `↓ 降價 ${Math.abs(pct)}%　|　省 NT$${saved.toLocaleString()}`, align: 'center', color: '#ff4d6d', weight: 'bold', size: 'sm' }
+              { type: 'text', text: `↓ 降價 ${Math.abs(pct)}%`, align: 'center', color: '#ff4d6d', weight: 'bold', size: 'sm', wrap: true },
+              { type: 'text', text: `省 NT$${saved.toLocaleString()}`, align: 'center', color: '#ff4d6d', size: 'xs', wrap: true }
             ]
           }
         ]
@@ -85,7 +94,7 @@ function buildPriceDropFlex({ productName, brand, platform, oldPrice, newPrice }
 }
 
 function buildGiftFlex({ productName, brand, platform, giftDescription, isAdded }) {
-  const platformLabel = { watsons:'屈臣氏', cosmed:'康是美', momo:'MOMO', pchome:'PChome' };
+  const platformLabel = { watsons:'屈臣氏', cosmed:'康是美', poya:'寶雅', pchome:'PChome' };
   const pfLabel = platformLabel[platform] || platform;
   const headerColor = isAdded ? '#9b6dca' : '#fbbf24';
   const headerText  = isAdded ? '🎁  新增贈品活動' : '⚠️  贈品活動結束';
@@ -126,9 +135,9 @@ function buildDailyReportFlex(products) {
   const now = new Date().toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
 
   const bubbles = products.slice(0, 10).map(p => {
-    const prices = [p.watsons_price, p.cosmed_price, p.momo_price].filter(v => v > 0);
+    const prices = [p.watsons_price, p.cosmed_price, p.poya_price].filter(v => v > 0);
     const minPrice = prices.length ? Math.min(...prices) : null;
-    const platformMap = { watsons_price:'屈臣氏', cosmed_price:'康是美', momo_price:'MOMO' };
+    const platformMap = { watsons_price:'屈臣氏', cosmed_price:'康是美', poya_price:'寶雅' };
     const lowestPf = minPrice ? Object.keys(platformMap).find(k => p[k] === minPrice) : null;
 
     return {
@@ -208,6 +217,77 @@ const LineService = {
     await this.sendAlert(flex.altText, flex);
   },
 
+  async sendGapReport(gaps) {
+    const client = getClient();
+    const userId = getTargetUserId();
+    if (!client || !userId) return;
+
+    const PF_LABEL = { watsons: '屈臣氏', cosmed: '康是美', poya: '寶雅' };
+    const PF_COLOR = { watsons: '#00a0e3', cosmed: '#f47920', poya: '#16a34a' };
+    const now = new Date().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+    const bubbles = gaps.map(g => {
+      const rows = ['watsons', 'cosmed', 'poya']
+        .filter(pf => g[pf] > 0)
+        .map(pf => ({
+          type: 'box', layout: 'horizontal', margin: 'xs',
+          contents: [
+            { type: 'text', text: PF_LABEL[pf], size: 'xs', color: PF_COLOR[pf], flex: 1 },
+            { type: 'text', text: `NT$${g[pf].toLocaleString()}`, size: 'xs', align: 'end', flex: 2,
+              color: g[pf] === g.min ? '#4ade80' : '#f0e8ff', weight: g[pf] === g.min ? 'bold' : 'regular' },
+          ]
+        }));
+
+      return {
+        type: 'bubble', size: 'micro',
+        body: {
+          type: 'box', layout: 'vertical', spacing: 'xs', paddingAll: '12px',
+          contents: [
+            { type: 'text', text: g.brand || '', size: 'xxs', color: '#9d8fba' },
+            { type: 'text', text: g.name, size: 'xs', weight: 'bold', wrap: true, color: '#f0e8ff', maxLines: 2 },
+            { type: 'separator', margin: 'sm', color: '#2a2245' },
+            ...rows,
+            {
+              type: 'box', layout: 'vertical', margin: 'sm',
+              backgroundColor: '#ff4d6d20', cornerRadius: '6px', paddingAll: '6px',
+              contents: [
+                { type: 'text', text: `價差 NT$${g.gap.toLocaleString()}`, align: 'center', color: '#ff4d6d', size: 'xs', weight: 'bold' }
+              ]
+            }
+          ]
+        },
+        styles: { body: { backgroundColor: '#0d0b1a' } }
+      };
+    });
+
+    const flex = {
+      type: 'flex',
+      altText: `📊 跨平台價差報告 ${now}（共 ${gaps.length} 筆）`,
+      contents: {
+        type: 'carousel',
+        contents: [
+          {
+            type: 'bubble', size: 'micro',
+            body: {
+              type: 'box', layout: 'vertical', justifyContent: 'center', paddingAll: '12px', spacing: 'xs',
+              contents: [
+                { type: 'text', text: '📊', size: 'xl', align: 'center' },
+                { type: 'text', text: '跨平台價差報告', weight: 'bold', align: 'center', color: '#f0e8ff', size: 'sm' },
+                { type: 'text', text: now, size: 'xxs', color: '#5c5075', align: 'center', margin: 'xs' },
+                { type: 'text', text: `共 ${gaps.length} 筆`, size: 'xxs', color: '#9b6dca', align: 'center' },
+              ]
+            },
+            styles: { body: { backgroundColor: '#0d0b1a' } }
+          },
+          ...bubbles
+        ]
+      }
+    };
+
+    await client.pushMessage(userId, flex);
+    logger.info('[LINE] 價差報告推播完成');
+  },
+
   async sendDailyReport(products) {
     const client = getClient();
     const userId = getTargetUserId();
@@ -231,7 +311,7 @@ const LineService = {
         ...p,
         watsons_price: getPlatformPrice('watsons'),
         cosmed_price:  getPlatformPrice('cosmed'),
-        momo_price:    getPlatformPrice('momo'),
+        poya_price:    getPlatformPrice('poya'),
       };
     });
 
@@ -241,7 +321,8 @@ const LineService = {
   },
 
   async testConnection(token, userId) {
-    const client = new Client({ channelAccessToken: token, channelSecret: '' });
+    const { secret } = getLineConfig();
+    const client = new Client({ channelAccessToken: token, channelSecret: secret });
     const flex = {
       type: 'flex',
       altText: '✅ 美妝競品監控台連線成功！',

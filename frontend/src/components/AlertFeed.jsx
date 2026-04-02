@@ -5,8 +5,8 @@ const TYPE_MAP = {
   gift_removed:  { icon:'⚠', cls:'ai-yellow', diffCls:'pos' },
   back_in_stock: { icon:'✓', cls:'ai-green',  diffCls:'neg' },
 }
-const PF_LABEL = { watsons:'屈臣氏', cosmed:'康是美', momo:'MOMO', pchome:'PChome' }
-const PF_CLASS = { watsons:'pb-watsons', cosmed:'pb-cosmed', momo:'pb-momo', pchome:'pb-watsons' }
+const PF_LABEL = { watsons:'屈臣氏', cosmed:'康是美', poya:'寶雅', pchome:'PChome' }
+const PF_CLASS = { watsons:'pb-watsons', cosmed:'pb-cosmed', poya:'pb-poya', pchome:'pb-watsons' }
 
 export default function AlertFeed({ alerts, onMarkAllRead }) {
   return (

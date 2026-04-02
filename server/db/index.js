@@ -35,7 +35,7 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS product_urls (
       id          TEXT PRIMARY KEY,
       product_id  TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-      platform    TEXT NOT NULL CHECK(platform IN ('watsons','cosmed','momo','pchome')),
+      platform    TEXT NOT NULL CHECK(platform IN ('watsons','cosmed','poya','pchome')),
       url         TEXT NOT NULL,
       platform_sku TEXT,
       created_at  TEXT DEFAULT (datetime('now','localtime'))
@@ -110,6 +110,49 @@ async function initDB() {
     -- 確保 line_settings 有一筆預設資料
     INSERT OR IGNORE INTO line_settings (id) VALUES (1);
   `);
+
+  // ── 遷移：移除 momo、加入 poya（product_urls 的 CHECK 需重建表） ──
+  try {
+    const row = db.prepare(`
+      SELECT sql FROM sqlite_master
+      WHERE type='table' AND name='product_urls'
+    `).get();
+
+    const ddl = row?.sql || '';
+    const needsMigration = ddl.includes("'momo'") || !ddl.includes("'poya'");
+
+    if (needsMigration) {
+      db.transaction(() => {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS product_urls_new (
+            id           TEXT PRIMARY KEY,
+            product_id   TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            platform     TEXT NOT NULL CHECK(platform IN ('watsons','cosmed','poya','pchome')),
+            url          TEXT NOT NULL,
+            platform_sku TEXT,
+            created_at   TEXT DEFAULT (datetime('now','localtime'))
+          );
+        `);
+
+        // momo 都是假的：直接不搬移 momo 資料
+        db.exec(`
+          INSERT INTO product_urls_new (id, product_id, platform, url, platform_sku, created_at)
+          SELECT id, product_id, platform, url, platform_sku, created_at
+          FROM product_urls
+          WHERE platform != 'momo';
+        `);
+
+        db.exec('DROP TABLE product_urls;');
+        db.exec('ALTER TABLE product_urls_new RENAME TO product_urls;');
+      })();
+    }
+  } catch {
+    // 遷移失敗時不阻斷啟動，後續可再手動處理
+  }
+
+  // ── 遷移：加入 base_name / variant 欄位 ──
+  try { db.exec("ALTER TABLE products ADD COLUMN base_name TEXT") } catch {}
+  try { db.exec("ALTER TABLE products ADD COLUMN variant TEXT") } catch {}
 
   return db;
 }

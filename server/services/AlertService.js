@@ -72,7 +72,7 @@ class AlertService {
   }
 
   _platformLabel(platform) {
-    return { watsons: '屈臣氏', cosmed: '康是美', momo: 'MOMO', pchome: 'PChome' }[platform] || platform;
+    return { watsons: '屈臣氏', cosmed: '康是美', poya: '寶雅', pchome: 'PChome' }[platform] || platform;
   }
 }
 

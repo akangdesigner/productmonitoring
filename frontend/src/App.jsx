@@ -9,13 +9,15 @@ import LogStrip       from './components/LogStrip'
 import PriceTable     from './components/PriceTable'
 import TrendChart     from './components/TrendChart'
 import AlertFeed      from './components/AlertFeed'
+import AlertRecordsPage from './components/AlertRecordsPage'
 import LineSettings   from './components/LineSettings'
+import ScraperPage    from './components/ScraperPage'
 import AddProductModal from './components/AddProductModal'
 
 const DEFAULT_LOG = [
   { ts:'03:00', ok:true,  msg:'屈臣氏 完成' },
   { ts:'03:04', ok:true,  msg:'康是美 完成' },
-  { ts:'03:09', ok:true,  msg:'MOMO 完成' },
+  { ts:'03:09', ok:true,  msg:'寶雅 完成' },
   { ts:'03:12', ok:true,  msg:'全部完成 · 3 筆異動' },
 ]
 
@@ -31,8 +33,10 @@ export default function App() {
   const [scraping,    setScraping]    = useState(false)
   const [scraperIdle, setScraperIdle] = useState(true)
   const [showModal,   setShowModal]   = useState(false)
+  const [gapTotal,    setGapTotal]    = useState(0)
 
-  const unreadCount = alerts.filter(a => !a.is_read).length
+  const lastSeenGap = parseInt(localStorage.getItem('gapLastSeen') || '0', 10)
+  const newGapCount = Math.max(0, gapTotal - lastSeenGap)
 
   const refresh = useCallback(async () => {
     const online = await checkBackend()
@@ -40,14 +44,16 @@ export default function App() {
     if (!online) return
 
     try {
-      const [kpiData, summary, alertData] = await Promise.all([
+      const [kpiData, summary, alertData, gapRes] = await Promise.all([
         api.getKPI(),
         api.getSummary(),
         api.getAlerts(),
+        api.getAlertGaps(1, 1),
       ])
       if (kpiData)   setKpi(kpiData)
       if (summary?.length)  setProducts(summary)
       if (alertData?.length) setAlerts(alertData)
+      if (gapRes?.total != null) setGapTotal(gapRes.total)
     } catch {}
   }, [])
 
@@ -120,8 +126,13 @@ export default function App() {
       <div className="layout" style={!isOnline ? { paddingTop: 36 } : {}}>
         <Sidebar
           activeNav={activeNav}
-          onNav={setActiveNav}
-          unreadCount={unreadCount}
+          onNav={(key) => {
+            if (key === 'alerts') {
+              localStorage.setItem('gapLastSeen', String(gapTotal))
+            }
+            setActiveNav(key)
+          }}
+          unreadCount={newGapCount}
           scraperIdle={scraperIdle}
         />
 
@@ -132,16 +143,23 @@ export default function App() {
         />
 
         <main className="main">
-          <KPICards kpi={{ ...kpi, unreadAlerts: unreadCount }} />
-          <LogStrip log={log} />
-          <PriceTable products={products} />
-
-          <div className="mid-grid">
-            <TrendChart products={products} isOnline={isOnline} />
-            <AlertFeed alerts={alerts} onMarkAllRead={handleMarkAllRead} />
-          </div>
-
-          <LineSettings isOnline={isOnline} toast={toast} />
+          {activeNav === 'scraper' ? (
+            <ScraperPage isOnline={isOnline} toast={toast} />
+          ) : activeNav === 'alerts' ? (
+            <AlertRecordsPage isOnline={isOnline} toast={toast} />
+          ) : activeNav === 'line' ? (
+            <LineSettings isOnline={isOnline} toast={toast} />
+          ) : (
+            <>
+              <KPICards kpi={{ ...kpi, unreadAlerts: newGapCount }} />
+              <LogStrip log={log} />
+              <PriceTable products={products} />
+              <div className="mid-grid">
+                <TrendChart products={products} isOnline={isOnline} />
+                <AlertFeed alerts={alerts} onMarkAllRead={handleMarkAllRead} />
+              </div>
+            </>
+          )}
         </main>
       </div>
 

@@ -22,7 +22,7 @@
   --yellow:     #fbbf24;
   --watsons:    #00a0e3;
   --cosmed:     #f47920;
-  --momo:       #e83750;
+  --poya:       #16a34a;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -161,31 +161,43 @@ body::before {
 .select-styled { background:var(--bg-surface); border:1px solid var(--border); color:var(--text-secondary); padding:6px 12px; border-radius:6px; font-family:'Noto Sans TC',sans-serif; font-size:12px; cursor:pointer; outline:none; }
 .select-styled:focus { border-color:var(--amethyst); }
 
+/* ── Input ── */
+.input-styled { background:var(--bg-surface); border:1px solid var(--border); color:var(--text-primary); padding:8px 12px; border-radius:6px; font-family:'Noto Sans TC',sans-serif; font-size:13px; outline:none; transition:border-color 0.2s; }
+.input-styled::placeholder { color:var(--text-muted); }
+.input-styled:focus { border-color:var(--amethyst); box-shadow:0 0 0 2px var(--amethyst-dim); }
+
+/* ── Card ── */
+.card { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; }
+
+/* ── Button disabled ── */
+.btn-primary:disabled,.btn-ghost:disabled { opacity:0.45; cursor:not-allowed; pointer-events:none; }
+
 /* ── Price Table ── */
 .table-wrap { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
 .price-table { width:100%; border-collapse:collapse; }
 .price-table thead tr { background:#0f0d1f; border-bottom:1px solid var(--border); }
-.price-table th { padding:12px 16px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.12em; color:var(--text-muted); text-align:left; text-transform:uppercase; }
-.price-table th.platform-col { text-align:right; }
-.price-table td { padding:14px 16px; font-size:13px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.price-table th { padding:12px 16px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.12em; color:var(--text-muted); text-align:center; text-transform:uppercase; }
+.price-table td { padding:14px 16px; font-size:13px; border-bottom:1px solid var(--border); vertical-align:middle; text-align:center; }
 .price-table tbody tr:last-child td { border-bottom:none; }
 .price-table tbody tr { transition:background 0.2s; }
 .price-table tbody tr:hover { background:var(--bg-surface); }
+.price-table td:first-child { text-align:left; }
 .product-cell { display:flex; align-items:center; gap:12px; }
 .product-img { width:40px; height:40px; border-radius:8px; background:linear-gradient(135deg,var(--rose-dim),var(--amethyst-dim)); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
 .product-name { font-weight:400; font-size:13px; line-height:1.3; }
 .product-brand { font-size:11px; color:var(--text-muted); margin-top:2px; }
-.price-cell { text-align:right; }
-.price-num { font-family:'DM Mono',monospace; font-size:14px; font-weight:500; }
+.price-cell { text-align:center; }
+.price-cell > * { text-align:center; margin-left:auto; margin-right:auto; }
+.price-num { font-family:'DM Mono',monospace; font-size:14px; font-weight:500; text-align:center; }
 .price-num.lowest  { color:var(--green); }
 .price-num.highest { color:var(--red); }
-.price-change { font-family:'DM Mono',monospace; font-size:10px; margin-top:2px; }
+.price-change { font-family:'DM Mono',monospace; font-size:10px; margin-top:2px; text-align:center; }
 .price-change.down { color:var(--green); }
 .price-change.up   { color:var(--red); }
 .platform-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:4px; font-family:'DM Mono',monospace; font-size:10px; }
 .pb-watsons { background:#00a0e315; color:var(--watsons); border:1px solid #00a0e330; }
 .pb-cosmed  { background:#f4792015; color:var(--cosmed);  border:1px solid #f4792030; }
-.pb-momo    { background:#e8375015; color:var(--momo);    border:1px solid #e8375030; }
+.pb-poya    { background:#16a34a15; color:var(--poya);    border:1px solid #16a34a30; }
 .gift-tag { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; border-radius:4px; font-size:10px; background:var(--amethyst-dim); color:var(--amethyst-light); border:1px solid var(--amethyst-dim); margin:2px; }
 
 /* ── Mid Grid ── */
@@ -258,7 +270,7 @@ body::before {
 .url-label { font-family:'DM Mono',monospace; font-size:11px; width:52px; flex-shrink:0; }
 .url-label.watsons { color:var(--watsons); }
 .url-label.cosmed  { color:var(--cosmed); }
-.url-label.momo    { color:var(--momo); }
+.url-label.poya    { color:var(--poya); }
 .emoji-picker { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
 .emoji-btn { width:36px; height:36px; border-radius:8px; background:var(--bg-surface); border:1px solid var(--border); font-size:18px; cursor:pointer; transition:all 0.15s; display:flex; align-items:center; justify-content:center; }
 .emoji-btn:hover, .emoji-btn.selected { border-color:var(--amethyst); background:var(--amethyst-dim); }

@@ -19,7 +19,7 @@ export default function KPICards({ kpi }) {
       <div className="kpi-card" style={{ '--accent': '#4ade8018' }}>
         <div className="kpi-label">最低價平台</div>
         <div className="kpi-value green" style={{ fontSize: 22, paddingTop: 6 }}>
-          {kpi.lowestPlatform ?? 'MOMO'}
+          {kpi.lowestPlatform ?? '寶雅'}
         </div>
         <div className="kpi-sub">本週最多商品最低價</div>
       </div>

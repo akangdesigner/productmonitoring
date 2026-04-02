@@ -9,23 +9,23 @@ export default function AddProductModal({ open, onClose, onSubmit }) {
   const [emoji, setEmoji]       = useState('✨')
   const [urlW, setUrlW]         = useState('')
   const [urlC, setUrlC]         = useState('')
-  const [urlM, setUrlM]         = useState('')
+  const [urlP, setUrlP]         = useState('')
   const [loading, setLoading]   = useState(false)
 
   function reset() {
     setName(''); setBrand(''); setCategory('skincare'); setEmoji('✨')
-    setUrlW(''); setUrlC(''); setUrlM('')
+    setUrlW(''); setUrlC(''); setUrlP('')
   }
 
   function handleClose() { reset(); onClose() }
 
   async function handleSubmit() {
     if (!name.trim())              return alert('請填寫商品名稱')
-    if (!urlW && !urlC && !urlM)   return alert('至少填寫一個平台網址')
+    if (!urlW && !urlC && !urlP)   return alert('至少填寫一個平台網址')
     const urls = []
     if (urlW) urls.push({ platform: 'watsons', url: urlW.trim() })
     if (urlC) urls.push({ platform: 'cosmed',  url: urlC.trim() })
-    if (urlM) urls.push({ platform: 'momo',    url: urlM.trim() })
+    if (urlP) urls.push({ platform: 'poya',    url: urlP.trim() })
     setLoading(true)
     await onSubmit({ name: name.trim(), brand: brand.trim(), category, emoji, urls })
     setLoading(false)
@@ -77,7 +77,7 @@ export default function AddProductModal({ open, onClose, onSubmit }) {
         {[
           { label: '屈臣氏', cls: 'watsons', val: urlW, set: setUrlW, ph: 'https://www.watsons.com.tw/product/...' },
           { label: '康是美', cls: 'cosmed',  val: urlC, set: setUrlC, ph: 'https://www.cosmed.com.tw/product/...' },
-          { label: 'MOMO',   cls: 'momo',    val: urlM, set: setUrlM, ph: 'https://www.momoshop.com.tw/goods/...' },
+          { label: '寶雅',   cls: 'poya',    val: urlP, set: setUrlP, ph: 'https://www.poyabuy.com.tw/v2/official/SalePageDetail/...' },
         ].map(({ label, cls, val, set, ph }) => (
           <div key={cls} className="url-row">
             <span className={`url-label ${cls}`}>{label}</span>

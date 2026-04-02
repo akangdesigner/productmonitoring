@@ -64,7 +64,6 @@ class WatsonsScraper extends BaseScraper {
       }
     });
   }
-}
 
   // ── 分類頁批量爬取（第 0～N 頁）─────────────────────────
   async scrapeCategory(baseUrl, totalPages = 9) {
@@ -80,71 +79,51 @@ class WatsonsScraper extends BaseScraper {
           const page = await this.newPage();
           try {
             await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-            await this.randomDelay(1000, 2500);
+            await this.randomDelay(1500, 3000);
 
-            // 等待商品卡片載入
-            await page.waitForSelector(
-              '.product-list-item, .product-tile, [class*="productItem"], [class*="product-item"], .yCmsContentSlot li',
-              { timeout: 15000 }
-            ).catch(() => null);
+            // 等待商品卡片載入（屈臣氏 Spartacus Angular）
+            await page.waitForSelector('.productContainer', { timeout: 15000 }).catch(() => null);
+
+            // 捲動頁面觸發懶載入
+            await page.evaluate(() => window.scrollBy(0, window.innerHeight * 2));
+            await new Promise(r => setTimeout(r, 2000));
 
             return await page.evaluate(() => {
               const results = [];
-
-              // 嘗試多種可能的商品卡片選擇器
-              const cardSelectors = [
-                '.product-list-item',
-                '.product-tile',
-                '[class*="productListItem"]',
-                '[class*="product-list"] li',
-                '.product-grid-item',
-                'li[class*="item"]',
-              ];
-
-              let cards = [];
-              for (const sel of cardSelectors) {
-                cards = document.querySelectorAll(sel);
-                if (cards.length > 0) break;
-              }
+              const cards = document.querySelectorAll('.productContainer');
 
               cards.forEach(card => {
                 // 商品名稱
-                const nameSelectors = [
-                  '[class*="productName"]', '[class*="product-name"]',
-                  '[class*="itemName"]',    'h3', 'h2',
-                  '[class*="name"]',
-                ];
-                let name = null;
-                for (const sel of nameSelectors) {
-                  const el = card.querySelector(sel);
-                  if (el?.textContent?.trim()) { name = el.textContent.trim(); break; }
-                }
+                const nameEl = card.querySelector('.productInfo [class*="name"], .productInfo a, .productInfo p');
+                const name = nameEl?.textContent?.trim() || null;
 
-                // 價格
+                // 價格（抓所有含數字的 span/div，取第一個像價格的）
                 const priceSelectors = [
-                  '[class*="priceValue"]', '[class*="price-value"]',
-                  '[class*="salePrice"]',  '[class*="currentPrice"]',
-                  '[class*="productPrice"]','[class*="price"]',
+                  '[class*="price"]', '[class*="Price"]',
+                  'cx-price', '.price',
                 ];
                 let priceStr = null;
                 for (const sel of priceSelectors) {
                   const el = card.querySelector(sel);
                   if (el?.textContent?.match(/\d/)) { priceStr = el.textContent.trim(); break; }
                 }
-
-                // 原價（劃線價）
-                const origSelectors = [
-                  '[class*="originalPrice"]', '[class*="original-price"]',
-                  '[class*="wasPrice"]',       'del', 's',
-                ];
-                let origStr = null;
-                for (const sel of origSelectors) {
-                  const el = card.querySelector(sel);
-                  if (el?.textContent?.match(/\d/)) { origStr = el.textContent.trim(); break; }
+                // fallback：找所有含 $ 或純數字的葉節點
+                if (!priceStr) {
+                  const spans = card.querySelectorAll('span, div');
+                  for (const el of spans) {
+                    if (el.children.length === 0 && /\$?\d{2,4}/.test(el.textContent.trim())) {
+                      priceStr = el.textContent.trim();
+                      break;
+                    }
+                  }
                 }
 
+                // 原價（劃線價）
+                const origEl = card.querySelector('del, s, [class*="original"], [class*="was"]');
+                const origStr = origEl?.textContent?.match(/\d/) ? origEl.textContent.trim() : null;
+
                 // 商品頁連結
-                const linkEl = card.querySelector('a[href*="/p/"], a[href*="product"], a[href]');
+                const linkEl = card.querySelector('a[href]');
                 const href = linkEl?.getAttribute('href') || null;
                 const productUrl = href
                   ? (href.startsWith('http') ? href : `https://www.watsons.com.tw${href}`)

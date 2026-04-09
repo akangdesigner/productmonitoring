@@ -1,22 +1,22 @@
 {
   "enabled": true,
-  "time": "17:05",
+  "time": "14:40",
   "days": "daily",
   "urls": [
     {
       "id": "aeec8b34-410d-479e-80dc-fe8ca9eb6847",
       "url": "https://www.watsons.com.tw/%E5%8C%96%E5%A6%9D%E5%93%81/%E5%94%87%E8%86%8F/c/10440301?currentPage=1",
       "platform": "watsons",
-      "label": "屈臣氏 唇膏第一頁",
-      "enabled": false,
+      "label": "屈臣氏 唇膏第二頁",
+      "enabled": true,
       "addedAt": "2026-04-01T06:18:11.459Z"
     },
     {
       "id": "aabbef23-0794-4fb2-a697-43fe74b920fa",
       "url": "https://www.watsons.com.tw/%E5%8C%96%E5%A6%9D%E5%93%81/%E5%94%87%E8%86%8F/c/10440301?currentPage=0",
       "platform": "watsons",
-      "label": "屈臣氏 唇膏第二頁",
-      "enabled": false,
+      "label": "屈臣氏 唇膏第一頁",
+      "enabled": true,
       "addedAt": "2026-04-01T06:25:46.880Z"
     },
     {
@@ -24,7 +24,7 @@
       "url": "https://shop.cosmed.com.tw/v2/official/SalePageCategory/461724?sortMode=Curator",
       "platform": "cosmed",
       "label": "康是美 唇膏",
-      "enabled": false,
+      "enabled": true,
       "addedAt": "2026-04-01T06:26:28.678Z"
     },
     {
@@ -34,6 +34,14 @@
       "label": "寶雅 彩妝第一頁",
       "enabled": true,
       "addedAt": "2026-04-01T07:12:10.994Z"
+    },
+    {
+      "id": "7814067f-b5d7-4504-a7d0-5bb9252970f2",
+      "url": "https://www.watsons.com.tw/%E5%8C%96%E5%A6%9D%E5%93%81/%E5%94%87%E8%86%8F/c/10440301?currentPage=2",
+      "platform": "watsons",
+      "label": "屈臣氏 唇膏第三頁",
+      "enabled": true,
+      "addedAt": "2026-04-02T06:12:18.662Z"
     }
   ]
 }

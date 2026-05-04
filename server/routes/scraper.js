@@ -664,7 +664,7 @@ async function matchAndUpdate(scrapedProducts, platform, sharedAiMap = null) {
 //  診斷 API
 // ═══════════════════════════════════════════════════════
 
-// GET /api/scraper/test-ai — 測試 GROQ 連線與解析
+// GET /api/scraper/test-ai — 測試 GROQ 連線，並用 DB 前 3 筆商品實測解析
 router.get('/test-ai', async (req, res) => {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return res.json({ ok: false, reason: 'GROQ_API_KEY 未設定' });
@@ -672,14 +672,21 @@ router.get('/test-ai', async (req, res) => {
   try {
     const Groq = require('groq-sdk');
     const groq = new Groq({ apiKey });
+
+    // 從 DB 取前 3 筆實際商品名稱來測試
+    const db = getDB();
+    const sampleRows = db.prepare('SELECT name FROM products LIMIT 3').all();
+    const sampleNames = sampleRows.map(r => r.name);
+    const listed = sampleNames.map((n, i) => `${i}: ${n}`).join('\n');
+
     const result = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',
-      messages: [{ role: 'user', content: '只回傳 JSON：[{"i":0,"brand":"DHC","productType":"護唇膏","spec":"1.5g"}]\n0: DHC DHC 極潤護唇膏 1.5g' }],
+      messages: [{ role: 'user', content: `只回傳 JSON 陣列，格式 [{"i":0,"brand":"","productType":"","spec":""}]，商品清單：\n${listed}` }],
       temperature: 0,
-      max_tokens: 100,
+      max_tokens: 300,
     });
     const text = result.choices[0]?.message?.content || '';
-    res.json({ ok: true, keyPrefix: apiKey.slice(0, 10) + '...', response: text });
+    res.json({ ok: true, keyPrefix: apiKey.slice(0, 10) + '...', sampleNames, rawResponse: text });
   } catch (err) {
     res.json({ ok: false, reason: err.message });
   }

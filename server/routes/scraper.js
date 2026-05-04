@@ -202,10 +202,12 @@ async function parseNamesWithAI(names, model = 'llama-3.1-8b-instant') {
         if (!jsonStr) { logger.warn('[AI解析] 回傳非 JSON'); break; }
 
         const parsed = JSON.parse(jsonStr);
-        parsed.forEach(p => {
-          if (typeof p.i !== 'number' || p.i < 0 || p.i >= batch.length) return;
+        parsed.forEach((p, arrayIdx) => {
+          // 優先用 "i" 欄位；模型若省略 "i" 則 fallback 用陣列索引
+          const itemIdx = (typeof p.i === 'number' && p.i >= 0 && p.i < batch.length) ? p.i : arrayIdx;
+          if (itemIdx >= batch.length) return;
           if (!p.productType || p.productType.length <= 1) return;
-          const originalName = batch[p.i];
+          const originalName = batch[itemIdx];
           const brand = (p.brand || '').trim();
           const productType = (p.productType || '').trim();
           const rawSpec = (p.spec || '').trim().replace(/\s+/g, '');

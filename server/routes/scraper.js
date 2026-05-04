@@ -139,7 +139,7 @@ function similarity(a, b) {
 // 解析失敗的商品記錄 warn，不使用任何 fallback 表達式
 const AI_BATCH_SIZE = 20; // 每批 20 筆，避免 8b 模型回傳截斷
 
-async function parseNamesWithAI(names, model = 'llama-3.1-8b-instant') {
+async function parseNamesWithAI(names, model = 'llama-3.1-8b-instant', _errors = null) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey || names.length === 0) return new Map();
 
@@ -226,7 +226,10 @@ async function parseNamesWithAI(names, model = 'llama-3.1-8b-instant') {
         break;
       } catch (err) {
         attempt++;
-        if (attempt >= 2) logger.warn(`[AI解析] 批次失敗（已重試）：${err.message}`);
+        if (attempt >= 2) {
+          logger.warn(`[AI解析] 批次失敗（已重試）：${err.message}`);
+          if (_errors) _errors.push(err.message);
+        }
       }
     }
   }
@@ -740,7 +743,8 @@ router.post('/reparse', async (req, res) => {
   if (unresolved.length === 0) return res.json({ ok: true, updated: 0, message: '沒有需要補解析的商品' });
 
   try {
-    const fixMap = await parseNamesWithAI(unresolved.map(r => r.name));
+    const batchErrors = [];
+    const fixMap = await parseNamesWithAI(unresolved.map(r => r.name), 'llama-3.1-8b-instant', batchErrors);
     const fixStmt = db.prepare('UPDATE products SET base_name=?, brand=?, variant=? WHERE id=?');
     const samples = [];
     let count = 0;
@@ -753,7 +757,7 @@ router.post('/reparse', async (req, res) => {
       }
     }
     logger.info(`[reparse] 完成：${count}/${unresolved.length} 筆成功解析`);
-    res.json({ ok: true, total: unresolved.length, updated: count, aiMapSize: fixMap.size, samples });
+    res.json({ ok: true, total: unresolved.length, updated: count, aiMapSize: fixMap.size, samples, batchErrors });
   } catch (err) {
     logger.error(`[reparse] 失敗：${err.message}`);
     res.json({ ok: false, error: err.message });

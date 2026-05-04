@@ -10,7 +10,7 @@ const AlertService = require('../services/AlertService');
 const logger = require('../utils/logger');
 
 // ── 排程設定存檔路徑 ──
-const SCHEDULE_FILE = path.join(__dirname, '../scraper-schedule.json');
+const SCHEDULE_FILE = path.join(__dirname, '../db/scraper-schedule.json');
 
 function loadSchedule() {
   try {

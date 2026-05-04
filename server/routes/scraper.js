@@ -692,6 +692,45 @@ router.get('/test-ai', async (req, res) => {
   }
 });
 
+// GET /api/scraper/reparse-debug — 用前 3 筆真實商品名稱測試完整 parseNamesWithAI 流程
+router.get('/reparse-debug', async (req, res) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return res.json({ ok: false, reason: 'GROQ_API_KEY 未設定' });
+
+  const db = getDB();
+  const rows = db.prepare('SELECT name FROM products LIMIT 3').all();
+  const names = rows.map(r => r.name);
+
+  const Groq = require('groq-sdk');
+  const groq = new Groq({ apiKey });
+  const listed = names.map((n, i) => `${i}: ${n}`).join('\n');
+
+  try {
+    const result = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [{ role: 'user', content: `你是電商數據清理專家。針對每筆商品名稱，回傳 brand、productType、spec。只回傳 JSON 陣列，不要其他文字。商品清單：\n${listed}` }],
+      temperature: 0,
+      max_tokens: 300,
+    });
+    const text = result.choices[0]?.message?.content || '';
+
+    // 同 parseNamesWithAI 的擷取邏輯
+    let jsonStr = null;
+    let depth = 0, start = -1;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '[') { if (start === -1) start = i; depth++; }
+      else if (text[i] === ']') { if (--depth === 0 && start !== -1) { jsonStr = text.slice(start, i + 1); break; } }
+    }
+
+    let parsed = null, parseError = null;
+    try { parsed = jsonStr ? JSON.parse(jsonStr) : null; } catch (e) { parseError = e.message; }
+
+    res.json({ ok: true, names, rawResponse: text, jsonStr, parsed, parseError });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
 // POST /api/scraper/reparse — 重新解析所有 base_name=name 的商品（不重爬，同步等待結果）
 router.post('/reparse', async (req, res) => {
   const db = getDB();

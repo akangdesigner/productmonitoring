@@ -661,6 +661,59 @@ async function matchAndUpdate(scrapedProducts, platform, sharedAiMap = null) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  診斷 API
+// ═══════════════════════════════════════════════════════
+
+// GET /api/scraper/test-ai — 測試 GROQ 連線與解析
+router.get('/test-ai', async (req, res) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return res.json({ ok: false, reason: 'GROQ_API_KEY 未設定' });
+
+  try {
+    const Groq = require('groq-sdk');
+    const groq = new Groq({ apiKey });
+    const result = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [{ role: 'user', content: '只回傳 JSON：[{"i":0,"brand":"DHC","productType":"護唇膏","spec":"1.5g"}]\n0: DHC DHC 極潤護唇膏 1.5g' }],
+      temperature: 0,
+      max_tokens: 100,
+    });
+    const text = result.choices[0]?.message?.content || '';
+    res.json({ ok: true, keyPrefix: apiKey.slice(0, 10) + '...', response: text });
+  } catch (err) {
+    res.json({ ok: false, reason: err.message });
+  }
+});
+
+// POST /api/scraper/reparse — 重新解析所有 base_name=name 的商品（不重爬）
+router.post('/reparse', async (req, res) => {
+  const db = getDB();
+  const unresolved = db.prepare("SELECT id, name FROM products WHERE base_name = name OR base_name IS NULL").all();
+  if (unresolved.length === 0) return res.json({ ok: true, message: '沒有需要補解析的商品' });
+
+  res.json({ ok: true, message: `開始重新解析 ${unresolved.length} 筆商品，請稍後查看結果` });
+
+  // 背景執行，不阻塞回應
+  setImmediate(async () => {
+    try {
+      const fixMap = await parseNamesWithAI(unresolved.map(r => r.name));
+      const fixStmt = db.prepare('UPDATE products SET base_name=?, brand=?, variant=? WHERE id=?');
+      let count = 0;
+      for (const row of unresolved) {
+        const p = fixMap.get(row.name);
+        if (p?.baseName && p.baseName !== row.name) {
+          fixStmt.run(p.baseName, p.brand || '', p.variant || '', row.id);
+          count++;
+        }
+      }
+      logger.info(`[reparse] 完成：${count}/${unresolved.length} 筆成功解析`);
+    } catch (err) {
+      logger.error(`[reparse] 失敗：${err.message}`);
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════
 //  URL 管理 API
 // ═══════════════════════════════════════════════════════
 

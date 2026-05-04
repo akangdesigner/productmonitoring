@@ -183,7 +183,7 @@ export default function App() {
           ) : activeNav === 'register' ? (
             <RegisterPage isOnline={isOnline} toast={toast} />
           ) : activeNav === 'guide' ? (
-            <GuidePage />
+            <GuidePage onNav={setActiveNav} />
           ) : (
             <>
               <KPICards kpi={{ ...kpi, unreadAlerts: newGapCount }} />

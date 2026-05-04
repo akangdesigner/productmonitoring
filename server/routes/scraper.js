@@ -138,14 +138,20 @@ async function parseNamesWithAI(names, model = 'llama-3.1-8b-instant') {
 
 規則：
 - 去除【...】促銷標籤（如【即期品】【特惠】）
-- 重複品牌只保留一次（如 "HEME heme" → "HEME"）
+- 商品名稱開頭常出現「英文品牌 中文品牌 中文品牌」或「品牌 品牌」的重複格式（如 "KATE 凱婷 凱婷"、"MAYBELLINE 媚比琳 媚比琳"、"CEZANNE CEZANNE"），brand 只取英文或主要名稱一次，忽略後面的中文譯名與重複
 - productType 必須是完整名詞（≥2字），不可只有「唇」「膚」等單字，無法辨識填「商品」
-- productType 只填核心品類（如「唇釉」「洗髮精」），不含顏色/系列描述
+- productType 只填核心品類（如「唇釉」「洗髮精」「唇膏」「唇線筆」），不含顏色/系列名稱
 - spec 填容量或數量規格（如 "3g"、"600ml"、"1.5g"、"3條"），找不到則填 ""
-- spec 不要填色號（如 "#01"、"No.3"）或系列名稱
+- spec 不要填色號（如 "#01"、"No.3"、"G03"）或系列名稱
 
-範例輸出：
-[{"i":0,"brand":"3CE","productType":"唇釉","spec":""},{"i":1,"brand":"潘婷","productType":"洗髮精","spec":"600ml"},{"i":2,"brand":"DHC","productType":"護唇膏","spec":"1.5g"}]
+範例輸入與輸出：
+輸入：
+0: KATE 凱婷 凱婷 怪獸級持色唇膏 18 3g
+1: MAYBELLINE 媚比琳 媚比琳 水嘟嘟蜜光潤唇膏 07嘟嘟野莓 2.8g #保濕0唇紋
+2: CEZANNE CEZANNE 修飾大師唇線筆 021-01 0.25G
+3: DHC DHC 極潤護唇膏 1.5g
+輸出：
+[{"i":0,"brand":"KATE","productType":"唇膏","spec":"3g"},{"i":1,"brand":"MAYBELLINE","productType":"唇膏","spec":"2.8g"},{"i":2,"brand":"CEZANNE","productType":"唇線筆","spec":"0.25g"},{"i":3,"brand":"DHC","productType":"護唇膏","spec":"1.5g"}]
 
 只回傳 JSON 陣列，不要其他文字。商品清單：`;
 

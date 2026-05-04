@@ -469,7 +469,7 @@ function Block({ block }) {
 }
 
 /* ── Main ── */
-export default function GuidePage() {
+export default function GuidePage({ onNav }) {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: INJECT_CSS }} />
@@ -484,6 +484,7 @@ export default function GuidePage() {
           border: '1px solid rgba(155,109,202,0.15)',
           position: 'relative', overflow: 'hidden',
           animation: 'gp-fadeUp 0.5s ease both',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 28,
         }}>
           {/* decorative orb */}
           <div style={{
@@ -492,21 +493,64 @@ export default function GuidePage() {
             background: 'radial-gradient(circle, rgba(155,109,202,0.12) 0%, transparent 70%)',
             pointerEvents: 'none',
           }}/>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.28em', color: 'var(--amethyst)', textTransform: 'uppercase', marginBottom: 14 }}>
-            使用說明 · GUIDE
+
+          {/* left: text */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.28em', color: 'var(--amethyst)', textTransform: 'uppercase', marginBottom: 14 }}>
+              使用說明 · GUIDE
+            </div>
+            <h1 style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 48, fontWeight: 300, letterSpacing: '-0.025em', lineHeight: 1.05,
+              background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--rose-light) 50%, var(--amethyst-light) 100%)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              margin: '0 0 14px',
+            }}>
+              第一次使用？
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, margin: 0, maxWidth: 420 }}>
+              這裡有你需要知道的一切——從平台設定到 LINE 通知，一步步帶你上手。
+            </p>
           </div>
-          <h1 style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontSize: 48, fontWeight: 300, letterSpacing: '-0.025em', lineHeight: 1.05,
-            background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--rose-light) 50%, var(--amethyst-light) 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            margin: '0 0 14px',
-          }}>
-            第一次使用？
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, margin: 0, maxWidth: 520 }}>
-            這裡有你需要知道的一切——從平台設定到 LINE 通知，一步步帶你上手。
-          </p>
+
+          {/* right: CTA */}
+          {onNav && (
+            <button
+              onClick={() => onNav('register')}
+              style={{
+                flexShrink: 0, position: 'relative', zIndex: 1,
+                background: 'linear-gradient(135deg, rgba(155,109,202,0.18), rgba(212,149,106,0.12))',
+                border: '1px solid rgba(155,109,202,0.35)',
+                borderRadius: 18, padding: '22px 26px',
+                cursor: 'pointer', textAlign: 'center',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                transition: 'all 0.25s ease',
+                minWidth: 148,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 12px 36px rgba(155,109,202,0.28)'; e.currentTarget.style.borderColor = 'rgba(155,109,202,0.6)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = 'rgba(155,109,202,0.35)' }}
+            >
+              <div style={{
+                width: 52, height: 52, borderRadius: 14,
+                background: 'linear-gradient(135deg, rgba(155,109,202,0.25), rgba(212,149,106,0.18))',
+                border: '1px solid rgba(155,109,202,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="url(#cta-g)" strokeWidth="1.8" fill="none"/>
+                  <path d="M12 14c-5 0-8 2-8 4v1h16v-1c0-2-3-4-8-4z" stroke="url(#cta-g)" strokeWidth="1.8" fill="none"/>
+                  <path d="M17 7l1.5 1.5M17 10h2M19 13l-1.5 1.5" stroke="url(#cta-g)" strokeWidth="1.6" strokeLinecap="round" opacity="0.7"/>
+                  <defs>
+                    <linearGradient id="cta-g" x1="4" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+                      <stop stopColor="#c084fc"/><stop offset="1" stopColor="#d4956a"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--amethyst-light)', lineHeight: 1.3, fontFamily: "'Noto Sans TC', sans-serif" }}>前往初始設定</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>SETUP →</div>
+            </button>
+          )}
         </div>
 
         {/* ── TOC ── */}

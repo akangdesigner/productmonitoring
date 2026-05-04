@@ -150,16 +150,21 @@ const DAYS_OPTIONS = [
   { value: 'weekends', label: '週六、週日' },
 ]
 
-function StepBadge({ n, delay = 0 }) {
+function SectionHead({ icon, title, sub, right }) {
   return (
-    <span style={{
-      width: 28, height: 28, borderRadius: '50%',
-      background: 'linear-gradient(135deg, #9b6dca, #d4956a)',
-      color: '#fff', fontSize: 12, fontWeight: 700,
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      flexShrink: 0, boxShadow: '0 2px 10px rgba(155,109,202,0.45)',
-      animationDelay: `${delay}ms`,
-    }}>{n}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+        background: 'linear-gradient(135deg, rgba(155,109,202,0.2), rgba(212,149,106,0.12))',
+        border: '1px solid rgba(155,109,202,0.22)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>{icon}</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Noto Sans TC', sans-serif" }}>{title}</div>
+        {sub && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{sub}</div>}
+      </div>
+      {right}
+    </div>
   )
 }
 
@@ -168,6 +173,54 @@ function MonoLabel({ children }) {
     <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.22em', color: 'var(--amethyst)', textTransform: 'uppercase', marginBottom: 8 }}>
       {children}
     </div>
+  )
+}
+
+function IcoGrid() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="3" width="7" height="7" rx="2" stroke="url(#rp-g1)" strokeWidth="1.8" fill="none"/>
+      <rect x="14" y="3" width="7" height="7" rx="2" stroke="url(#rp-g1)" strokeWidth="1.8" fill="none"/>
+      <rect x="3" y="14" width="7" height="7" rx="2" stroke="url(#rp-g1)" strokeWidth="1.8" fill="none"/>
+      <rect x="14" y="14" width="7" height="7" rx="2" stroke="url(#rp-g1)" strokeWidth="1.8" fill="none" opacity="0.5"/>
+      <defs><linearGradient id="rp-g1" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse"><stop stopColor="#c084fc"/><stop offset="1" stopColor="#d4956a"/></linearGradient></defs>
+    </svg>
+  )
+}
+function IcoLink() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="url(#rp-g2)" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="url(#rp-g2)" strokeWidth="1.8" strokeLinecap="round"/>
+      <defs><linearGradient id="rp-g2" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stopColor="#38bdf8"/><stop offset="1" stopColor="#c084fc"/></linearGradient></defs>
+    </svg>
+  )
+}
+function IcoClock() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="url(#rp-g3)" strokeWidth="1.8"/>
+      <path d="M12 7v5l3.5 3.5" stroke="url(#rp-g3)" strokeWidth="2" strokeLinecap="round"/>
+      <defs><linearGradient id="rp-g3" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse"><stop stopColor="#fbbf24"/><stop offset="1" stopColor="#f97316"/></linearGradient></defs>
+    </svg>
+  )
+}
+function IcoTag() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" stroke="url(#rp-g4)" strokeWidth="1.8" fill="none"/>
+      <circle cx="7" cy="7" r="1.5" fill="url(#rp-g4)"/>
+      <defs><linearGradient id="rp-g4" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stopColor="#4ade80"/><stop offset="1" stopColor="#38bdf8"/></linearGradient></defs>
+    </svg>
+  )
+}
+function IcoBell() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="url(#rp-g5)" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="url(#rp-g5)" strokeWidth="1.8" strokeLinecap="round"/>
+      <defs><linearGradient id="rp-g5" x1="3" y1="8" x2="21" y2="21" gradientUnits="userSpaceOnUse"><stop stopColor="#4ade80"/><stop offset="1" stopColor="#38bdf8"/></linearGradient></defs>
+    </svg>
   )
 }
 
@@ -310,9 +363,19 @@ export default function RegisterPage({ isOnline, toast }) {
       <style dangerouslySetInnerHTML={{ __html: INJECT_CSS }} />
       <div style={{ padding: '36px 24px 80px', maxWidth: 820, margin: '0 auto' }}>
 
-        {/* ── Header ── */}
-        <div style={{ marginBottom: 36 }}>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.28em', color: 'var(--amethyst)', textTransform: 'uppercase', marginBottom: 12 }}>
+        {/* ── Hero ── */}
+        <div style={{
+          marginBottom: 32,
+          padding: '36px 32px',
+          borderRadius: 20,
+          background: 'linear-gradient(135deg, rgba(155,109,202,0.1) 0%, rgba(212,149,106,0.07) 50%, rgba(0,0,0,0) 100%)',
+          border: '1px solid rgba(155,109,202,0.15)',
+          position: 'relative', overflow: 'hidden',
+          animation: 'rp-fadeUp 0.5s ease both',
+        }}>
+          <div style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(212,149,106,0.12) 0%, transparent 70%)', pointerEvents: 'none' }}/>
+          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.28em', color: 'var(--amethyst)', textTransform: 'uppercase', marginBottom: 14 }}>
             初始化 · SETUP
           </div>
           <h1 style={{
@@ -324,7 +387,7 @@ export default function RegisterPage({ isOnline, toast }) {
           }}>
             競品監控設定
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, margin: 0, maxWidth: 560 }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, margin: 0, maxWidth: 520 }}>
             選擇最多 3 個要追蹤的電商平台，填入分類頁網址，並設定排程與 LINE 推播。
           </p>
         </div>
@@ -352,19 +415,21 @@ export default function RegisterPage({ isOnline, toast }) {
 
           {/* ── Step 1: Platforms ── */}
           <div className="rp-section" style={{ animationDelay: '0ms' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
-              <StepBadge n={1} />
-              <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>選擇監控平台</span>
-              <div style={{
-                marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-                background: 'rgba(155,109,202,0.12)', border: '1px solid rgba(155,109,202,0.22)',
-                borderRadius: 20, padding: '4px 12px',
-              }}>
-                <span style={{ fontSize: 12, color: 'var(--amethyst-light)', fontFamily: "'DM Mono', monospace" }}>
-                  {selected.length} / 3
-                </span>
-              </div>
-            </div>
+            <SectionHead
+              icon={<IcoGrid />}
+              title="選擇監控平台"
+              sub="最多選擇 3 個電商平台"
+              right={
+                <div style={{
+                  background: 'rgba(155,109,202,0.12)', border: '1px solid rgba(155,109,202,0.22)',
+                  borderRadius: 20, padding: '4px 14px',
+                }}>
+                  <span style={{ fontSize: 12, color: 'var(--amethyst-light)', fontFamily: "'DM Mono', monospace" }}>
+                    {selected.length} / 3
+                  </span>
+                </div>
+              }
+            />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
               {PLATFORMS.map(p => {
                 const isSelected = selected.includes(p.key)
@@ -403,13 +468,7 @@ export default function RegisterPage({ isOnline, toast }) {
           {/* ── Step 2: URLs ── */}
           {selected.length > 0 && (
             <div className="rp-section" style={{ animationDelay: '60ms' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
-                <StepBadge n={2} delay={60} />
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>填入分類頁網址</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>選填，可新增多筆</div>
-                </div>
-              </div>
+              <SectionHead icon={<IcoLink />} title="填入分類頁網址" sub="選填，可新增多筆網址" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
                 {selected.map(key => {
                   const p = PLATFORMS.find(pl => pl.key === key)
@@ -470,13 +529,7 @@ export default function RegisterPage({ isOnline, toast }) {
 
           {/* ── Step 3: Schedule ── */}
           <div className="rp-section" style={{ animationDelay: '120ms' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
-              <StepBadge n={2 + stepBase} delay={120} />
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>自動排程爬蟲</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>設定定時自動執行頻率</div>
-              </div>
-            </div>
+            <SectionHead icon={<IcoClock />} title="自動排程爬蟲" sub="設定定時自動執行頻率" />
             <div
               style={{
                 display: 'flex', alignItems: 'center', gap: 14,
@@ -536,13 +589,7 @@ export default function RegisterPage({ isOnline, toast }) {
 
           {/* ── Step 4: Own brands ── */}
           <div className="rp-section" style={{ animationDelay: '180ms' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
-              <StepBadge n={3 + stepBase} delay={180} />
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>自有品牌設定</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>選填，用於儀表板比價基準</div>
-              </div>
-            </div>
+            <SectionHead icon={<IcoTag />} title="自有品牌設定" sub="選填，用於儀表板比價基準" />
             <MonoLabel>品牌名稱</MonoLabel>
             <textarea
               className="rp-input"
@@ -558,13 +605,7 @@ export default function RegisterPage({ isOnline, toast }) {
 
           {/* ── Step 5: LINE ── */}
           <div className="rp-section" style={{ animationDelay: '240ms' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
-              <StepBadge n={4 + stepBase} delay={240} />
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>LINE 推播設定</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>選填，降價警示即時推播</div>
-              </div>
-            </div>
+            <SectionHead icon={<IcoBell />} title="LINE 推播設定" sub="選填，降價警示即時推播" />
             <MonoLabel>LINE User ID</MonoLabel>
             <input
               className="rp-input"

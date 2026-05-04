@@ -159,10 +159,10 @@ async function parseNamesWithAI(names, model = 'llama-3.1-8b-instant') {
 規則：
 - 去除【...】促銷標籤（如【即期品】【特惠】）
 - 商品名稱開頭常出現「英文品牌 中文品牌 中文品牌」或「品牌 品牌」的重複格式（如 "KATE 凱婷 凱婷"、"MAYBELLINE 媚比琳 媚比琳"、"CEZANNE CEZANNE"），brand 只取英文或主要名稱一次，忽略後面的中文譯名與重複
-- productType 必須是完整名詞（≥2字），不可只有「唇」「膚」等單字，無法辨識填「商品」
-- productType 只填核心品類（如「唇釉」「洗髮精」「唇膏」「唇線筆」），不含顏色/系列名稱
-- spec 填容量或數量規格（如 "3g"、"600ml"、"1.5g"、"3條"），找不到則填 ""
-- spec 不要填色號（如 "#01"、"No.3"、"G03"）或系列名稱
+- productType 只填核心品類（如「唇膏」「唇釉」「唇線筆」「洗髮精」），必須 ≥2 字，無法辨識填「商品」
+- productType 中若含有系列名稱修飾詞（如「光誘恆吻唇膏」「怪獸級持色唇膏」「水嘟嘟蜜光潤唇膏」），只保留最後的核心品類詞（唇膏），去除前綴系列名
+- spec 只填容量或數量規格（如 "3g"、"600ml"、"1.5g"、"3條"），找不到則填 ""
+- spec 不要填色號：色號格式包括 "#01"、"No.3"、"G03"、"N 352"、"PK-1"、純數字編號（如 "18"、"352"）、英數混合碼（如 "RD301"）
 
 範例輸入與輸出：
 輸入：
@@ -170,8 +170,10 @@ async function parseNamesWithAI(names, model = 'llama-3.1-8b-instant') {
 1: MAYBELLINE 媚比琳 媚比琳 水嘟嘟蜜光潤唇膏 07嘟嘟野莓 2.8g #保濕0唇紋
 2: CEZANNE CEZANNE 修飾大師唇線筆 021-01 0.25G
 3: DHC DHC 極潤護唇膏 1.5g
+4: VISEE光誘恆吻唇膏 N 352
+5: OPERA渲漾水色唇膏N-06玫紅 3.6g
 輸出：
-[{"i":0,"brand":"KATE","productType":"唇膏","spec":"3g"},{"i":1,"brand":"MAYBELLINE","productType":"唇膏","spec":"2.8g"},{"i":2,"brand":"CEZANNE","productType":"唇線筆","spec":"0.25g"},{"i":3,"brand":"DHC","productType":"護唇膏","spec":"1.5g"}]
+[{"i":0,"brand":"KATE","productType":"唇膏","spec":"3g"},{"i":1,"brand":"MAYBELLINE","productType":"唇膏","spec":"2.8g"},{"i":2,"brand":"CEZANNE","productType":"唇線筆","spec":"0.25g"},{"i":3,"brand":"DHC","productType":"護唇膏","spec":"1.5g"},{"i":4,"brand":"VISEE","productType":"唇膏","spec":""},{"i":5,"brand":"OPERA","productType":"唇膏","spec":"3.6g"}]
 
 只回傳 JSON 陣列，不要其他文字。商品清單：`;
 

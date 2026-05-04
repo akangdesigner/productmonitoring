@@ -589,6 +589,12 @@ async function matchAndUpdate(scrapedProducts, platform, sharedAiMap = null) {
         if (addedThisRun.has(best.id)) continue;
         addedThisRun.add(best.id);
 
+        // 若舊 base_name 等於 name（代表當初未解析），用本次 AI 結果補上
+        if (best.base_name === best.name && plan.parsed?.baseName && plan.parsed.baseName !== best.name) {
+          db.prepare('UPDATE products SET base_name=?, brand=?, variant=? WHERE id=?')
+            .run(plan.parsed.baseName, plan.parsed.brand || best.brand || '', plan.itemVariant || '', best.id);
+        }
+
         const latest = db.prepare(`SELECT price FROM price_records WHERE product_id=? AND platform=? ORDER BY scraped_at DESC LIMIT 1`).get(best.id, platform);
         if (latest && latest.price !== item.price) {
           insertPrice.run(uuidv4(), best.id, platform, item.price, item.origPrice ?? null, null);

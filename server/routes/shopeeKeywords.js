@@ -43,6 +43,27 @@ function applySchedule(s) {
 // 啟動時載入排程
 applySchedule(loadSchedule());
 
+// ── 查蝦皮商家資訊（by shop_id）──
+const SHOPEE_SHOP_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Referer': 'https://shopee.tw/',
+  'Accept': 'application/json',
+};
+
+async function fetchShopInfo(shopId) {
+  try {
+    const res = await axios.get(
+      `https://shopee.tw/api/v4/shop/get_shop_detail?shopid=${shopId}&limit=1`,
+      { headers: SHOPEE_SHOP_HEADERS, timeout: 8000 }
+    );
+    const d = res.data?.data;
+    if (!d) return null;
+    return { name: d.name || null, is_official: !!d.is_official_shop };
+  } catch {
+    return null;
+  }
+}
+
 // ── 呼叫 Apify 搜尋蝦皮 ──
 async function fetchShopee(keyword, maxProducts = 30) {
   const token = process.env.APIFY_TOKEN;
@@ -67,7 +88,7 @@ async function fetchShopee(keyword, maxProducts = 30) {
   );
 
   const raw = Array.isArray(response.data) ? response.data : [];
-  return raw.map(item => ({
+  const items = raw.map(item => ({
     shop_id:        item.shop_id,
     shop_name:      item.shop_name || item.shopName || item.seller_name || item.seller || null,
     item_id:        item.item_id,
@@ -81,6 +102,21 @@ async function fetchShopee(keyword, maxProducts = 30) {
     location:       item.location,
     image_url:      item.image_url,
     url:            item.url,
+  }));
+
+  // 補充商家名稱：收集不重複的 shop_id 批次查蝦皮 API
+  const shopIds = [...new Set(items.map(i => i.shop_id).filter(Boolean))];
+  const shopMap = {};
+  for (const sid of shopIds) {
+    const info = await fetchShopInfo(sid);
+    if (info) shopMap[sid] = info;
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  return items.map(item => ({
+    ...item,
+    shop_name: shopMap[item.shop_id]?.name ?? item.shop_name,
+    is_mall:   shopMap[item.shop_id]?.is_official ?? item.is_mall,
   }));
 }
 

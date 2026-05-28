@@ -1281,12 +1281,22 @@ export default function ScraperPage({ isOnline, toast }) {
                           </span>
                         )}
                       </div>
-                      {item.rating != null && (
-                        <div style={{ fontSize: 10, color: '#facc15', marginTop: 3 }}>
-                          ★ {Number(item.rating).toFixed(1)}
-                          {item.sold_count != null && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>售 {item.sold_count}</span>}
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>
+                        {item.is_mall && (
+                          <span style={{
+                            fontSize: 10, background: 'rgba(249,115,22,0.15)', color: '#fb923c',
+                            borderRadius: 4, padding: '1px 5px', fontWeight: 500,
+                          }}>Mall</span>
+                        )}
+                        {item.rating != null && (
+                          <span style={{ fontSize: 10, color: '#facc15' }}>
+                            ★ {Number(item.rating).toFixed(1)}
+                          </span>
+                        )}
+                        {item.sold_count != null && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>售 {item.sold_count}</span>
+                        )}
+                      </div>
                       {item.shop_name && (
                         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                           🏪 {item.shop_name}

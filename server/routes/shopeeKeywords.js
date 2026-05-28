@@ -197,12 +197,17 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── PATCH /api/shopee-keywords/:id ── 切換啟用狀態
+// ── PATCH /api/shopee-keywords/:id ── 更新關鍵字設定（enabled / max_products）
 router.patch('/:id', (req, res) => {
-  const { enabled } = req.body;
-  if (enabled === undefined) return res.status(400).json({ error: '請提供 enabled' });
+  const { enabled, max_products } = req.body;
   const db = getDB();
-  db.prepare('UPDATE shopee_keywords SET enabled = ? WHERE id = ?').run(enabled ? 1 : 0, req.params.id);
+  if (enabled !== undefined) {
+    db.prepare('UPDATE shopee_keywords SET enabled = ? WHERE id = ?').run(enabled ? 1 : 0, req.params.id);
+  }
+  if (max_products !== undefined) {
+    const n = Math.max(1, Math.min(100, Number(max_products) || 30));
+    db.prepare('UPDATE shopee_keywords SET max_products = ? WHERE id = ?').run(n, req.params.id);
+  }
   res.json({ ok: true });
 });
 

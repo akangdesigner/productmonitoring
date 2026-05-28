@@ -118,6 +118,7 @@ export default function ScraperPage({ isOnline, toast }) {
   const [kwSchedule,       setKwSchedule]       = useState({ enabled: true, time: '02:00' })
   const [kwSchedSaving,    setKwSchedSaving]    = useState(false)
   const [kwNewInput,       setKwNewInput]       = useState('')
+  const [kwSort,           setKwSort]           = useState('created_desc')
 
   const newPlatform = detectPlatform(newUrl)
 
@@ -1033,6 +1034,26 @@ export default function ScraperPage({ isOnline, toast }) {
           </button>
         </div>
 
+        {/* 排序 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>排序：</span>
+          <select
+            value={kwSort}
+            onChange={e => setKwSort(e.target.value)}
+            style={{
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8, padding: '4px 10px', color: 'var(--text-primary)',
+              fontSize: 12, fontFamily: 'Noto Sans TC, sans-serif', outline: 'none', cursor: 'pointer',
+            }}
+          >
+            <option value="created_desc" style={{ background: '#1a1630' }}>建立時間（新→舊）</option>
+            <option value="created_asc"  style={{ background: '#1a1630' }}>建立時間（舊→新）</option>
+            <option value="name_asc"     style={{ background: '#1a1630' }}>關鍵字（A→Z）</option>
+            <option value="last_run"     style={{ background: '#1a1630' }}>上次執行（最近）</option>
+            <option value="count_desc"   style={{ background: '#1a1630' }}>商品數量（多→少）</option>
+          </select>
+        </div>
+
         {/* 直接新增關鍵字 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <input
@@ -1060,7 +1081,13 @@ export default function ScraperPage({ isOnline, toast }) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {kwList.map(kw => (
+            {[...kwList].sort((a, b) => {
+              if (kwSort === 'created_asc')  return new Date(a.created_at) - new Date(b.created_at)
+              if (kwSort === 'name_asc')     return a.keyword.localeCompare(b.keyword, 'zh-Hant')
+              if (kwSort === 'last_run')     return new Date(b.last_run_at || 0) - new Date(a.last_run_at || 0)
+              if (kwSort === 'count_desc')   return (b.item_count || 0) - (a.item_count || 0)
+              return new Date(b.created_at) - new Date(a.created_at) // created_desc default
+            }).map(kw => (
               <div key={kw.id} style={{
                 display: 'flex', alignItems: 'center', gap: 12,
                 background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
@@ -1092,6 +1119,31 @@ export default function ScraperPage({ isOnline, toast }) {
                   ) : (
                     <div>尚未執行</div>
                   )}
+                </div>
+
+                {/* 抓取筆數設定 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>筆數</span>
+                  <input
+                    type="number"
+                    min={1} max={100}
+                    defaultValue={kw.max_products || 30}
+                    onBlur={async e => {
+                      const val = Math.max(1, Math.min(100, Number(e.target.value) || 30))
+                      e.target.value = val
+                      if (val === kw.max_products) return
+                      try {
+                        await api.updateShopeeKeyword(kw.id, { max_products: val })
+                        setKwList(prev => prev.map(k => k.id === kw.id ? { ...k, max_products: val } : k))
+                      } catch (err) { toast(err.message, 'error') }
+                    }}
+                    style={{
+                      width: 48, background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: 6, padding: '3px 6px', color: 'var(--text-primary)',
+                      fontSize: 12, fontFamily: 'DM Mono, monospace', outline: 'none', textAlign: 'center',
+                    }}
+                  />
                 </div>
 
                 {/* 查看結果 */}

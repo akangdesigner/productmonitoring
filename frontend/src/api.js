@@ -70,6 +70,8 @@ export const api = {
   deleteShopeeKeyword:  (id)  => apiFetch(`/api/shopee-keywords/${id}`, { method: 'DELETE' }),
   toggleShopeeKeyword:  (id, enabled) =>
     apiFetch(`/api/shopee-keywords/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+  updateShopeeKeyword:  (id, fields) =>
+    apiFetch(`/api/shopee-keywords/${id}`, { method: 'PATCH', body: JSON.stringify(fields) }),
   runShopeeKeyword:     (id)  => apiFetch(`/api/shopee-keywords/${id}/run`, { method: 'POST' }),
   getShopeeKeywordResults: (id) => apiFetch(`/api/shopee-keywords/${id}/results`),
 };

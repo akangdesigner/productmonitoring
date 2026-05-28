@@ -964,7 +964,7 @@ export default function ScraperPage({ isOnline, toast }) {
                           )}
                         </div>
                         {item.shop_name && (
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                             🏪 {item.shop_name}
                           </div>
                         )}
@@ -1111,7 +1111,7 @@ export default function ScraperPage({ isOnline, toast }) {
                 </span>
 
                 {/* 上次執行資訊 */}
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', lineHeight: 1.6, flexShrink: 0 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right', lineHeight: 1.6, flexShrink: 0 }}>
                   {kw.last_run_at ? (
                     <>
                       <div>上次：{kw.last_run_at}</div>
@@ -1210,7 +1210,7 @@ export default function ScraperPage({ isOnline, toast }) {
         {kwResults && kwResultsId && !kwResultsLoading && (
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 抓取時間：{kwResults.run_at}　共 {kwResults.item_count} 筆
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1298,7 +1298,7 @@ export default function ScraperPage({ isOnline, toast }) {
                         )}
                       </div>
                       {item.shop_name && (
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                           🏪 {item.shop_name}
                         </div>
                       )}

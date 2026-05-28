@@ -842,7 +842,7 @@ export default function ScraperPage({ isOnline, toast }) {
                 onClick={async () => {
                   setKwAddLoading(true)
                   try {
-                    await api.addShopeeKeyword(apifyResults.keyword, apifyMax, 'daily')
+                    await api.addShopeeKeyword(apifyResults.keyword, apifyMax, apifyResults.items)
                     const updated = await api.getShopeeKeywords()
                     setKwList(updated)
                     toast(`已將「${apifyResults.keyword}」加入追蹤清單`, 'success')

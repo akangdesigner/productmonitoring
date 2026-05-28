@@ -158,9 +158,9 @@ router.get('/', (req, res) => {
   res.json(rows);
 });
 
-// ── POST /api/shopee-keywords ── 新增關鍵字
+// ── POST /api/shopee-keywords ── 新增關鍵字（可附帶初始結果一起存入）
 router.post('/', (req, res) => {
-  const { keyword, max_products = 30 } = req.body;
+  const { keyword, max_products = 30, initial_items } = req.body;
   if (!keyword?.trim()) return res.status(400).json({ error: '請提供關鍵字' });
 
   const db = getDB();
@@ -168,7 +168,24 @@ router.post('/', (req, res) => {
   if (existing) return res.status(409).json({ error: '此關鍵字已在追蹤清單中' });
 
   const id = uuidv4();
-  db.prepare('INSERT INTO shopee_keywords (id, keyword, max_products) VALUES (?, ?, ?)').run(id, keyword.trim(), Number(max_products));
+
+  db.transaction(() => {
+    const items = Array.isArray(initial_items) ? initial_items : [];
+    const count = items.length;
+
+    db.prepare(`
+      INSERT INTO shopee_keywords (id, keyword, max_products, last_run_at, item_count)
+      VALUES (?, ?, ?, ${count > 0 ? "datetime('now','localtime')" : 'NULL'}, ?)
+    `).run(id, keyword.trim(), Number(max_products), count);
+
+    if (count > 0) {
+      db.prepare(`
+        INSERT INTO shopee_results (id, keyword_id, item_count, items)
+        VALUES (?, ?, ?, ?)
+      `).run(uuidv4(), id, count, JSON.stringify(items));
+    }
+  })();
+
   res.json({ ok: true, id });
 });
 

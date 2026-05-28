@@ -65,8 +65,8 @@ export const api = {
   getShopeeKeywordSchedule: () => apiFetch('/api/shopee-keywords/schedule'),
   setShopeeKeywordSchedule: (s) => apiFetch('/api/shopee-keywords/schedule', { method: 'PUT', body: JSON.stringify(s) }),
   getShopeeKeywords:    ()    => apiFetch('/api/shopee-keywords'),
-  addShopeeKeyword:     (keyword, max_products, schedule_type) =>
-    apiFetch('/api/shopee-keywords', { method: 'POST', body: JSON.stringify({ keyword, max_products, schedule_type }) }),
+  addShopeeKeyword:     (keyword, max_products, initial_items) =>
+    apiFetch('/api/shopee-keywords', { method: 'POST', body: JSON.stringify({ keyword, max_products, initial_items }) }),
   deleteShopeeKeyword:  (id)  => apiFetch(`/api/shopee-keywords/${id}`, { method: 'DELETE' }),
   toggleShopeeKeyword:  (id, enabled) =>
     apiFetch(`/api/shopee-keywords/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),

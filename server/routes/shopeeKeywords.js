@@ -53,7 +53,6 @@ async function fetchShopee(keyword, maxProducts = 30) {
     {
       country: 'tw',
       keyword: keyword.trim(),
-      maxItems: Number(maxProducts),
       maxProducts: Number(maxProducts),
       mode: 'keyword',
       sort: 'relevancy',

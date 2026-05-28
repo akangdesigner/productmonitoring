@@ -30,7 +30,6 @@ router.post('/shopee', async (req, res) => {
       {
         country,
         keyword: keyword.trim(),
-        maxItems: Number(maxProducts),
         maxProducts: Number(maxProducts),
         mode: 'keyword',
         sort,

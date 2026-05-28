@@ -60,7 +60,7 @@ function applySchedule(s) {
       const jobId = uuidv4();
       db.prepare('INSERT INTO scrape_jobs (id, platform, target_url) VALUES (?, ?, ?)').run(jobId, item.platform, item.url);
       try {
-        const products = await scrapeCategoryPage(item.url, item.platform);
+        const products = await scrapeCategoryPage(item.url, item.platform, item.maxPages ?? 1);
         jobs.push({ platform: item.platform, products, jobId });
         logger.info(`[排程] ${item.platform} 爬取完成，${products.length} 筆`);
       } catch (err) {
@@ -137,17 +137,15 @@ function similarity(a, b) {
   return minLen > 0 ? inter / minLen : 0;
 }
 
-// ── AI 批次解析商品名稱（Groq）──
+// ── AI 批次解析商品名稱（OpenRouter + Claude Haiku）──
 // 回傳 Map<name, { baseName, brand, productType, variant }>
 // 解析失敗的商品記錄 warn，不使用任何 fallback 表達式
-const AI_BATCH_SIZE = 8; // 每批 8 筆，避免模型多行格式造成 token 截斷
+const AI_BATCH_SIZE = 8; // 每批 8 筆
 
-async function parseNamesWithAI(names, model = 'llama-3.1-8b-instant', _errors = null, onBatchDone = null) {
-  const apiKey = process.env.GROQ_API_KEY;
+async function parseNamesWithAI(names, _model = null, _errors = null, onBatchDone = null) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey || names.length === 0) return new Map();
 
-  const Groq = require('groq-sdk');
-  const groq = new Groq({ apiKey });
   const result = new Map();
 
   const unique = [...new Set(names)];
@@ -184,30 +182,40 @@ Example input:
 
   for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
     const batch = batches[batchIdx];
-    // 批次間間隔 15 秒，避免 Groq TPM 6000/min 限制（每批約 1100 tokens）
-    if (batchIdx > 0) await new Promise(r => setTimeout(r, 15000));
+    if (batchIdx > 0) await new Promise(r => setTimeout(r, 2000));
     let attempt = 0;
     while (attempt < 3) {
       try {
         const listed = batch.map((n, i) => `${i}: ${n}`).join('\n');
-        const res = await groq.chat.completions.create({
-          model,
-          messages: [{ role: 'user', content: PROMPT_HEADER + '\n' + listed }],
-          temperature: 0,
-          max_tokens: 800,
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'anthropic/claude-haiku-4-5',
+            messages: [{ role: 'user', content: PROMPT_HEADER + '\n' + listed }],
+            temperature: 0,
+            max_tokens: 800,
+          }),
         });
-
-        const text = res.choices[0]?.message?.content?.trim() || '[]';
-        // 只抓 [{ 開頭的 JSON 物件陣列，跳過 code 裡的空陣列 [] 或無關的 [
+        if (!response.ok) {
+          const errText = await response.text();
+          const err = new Error(`HTTP ${response.status}: ${errText}`);
+          err.status = response.status;
+          throw err;
+        }
+        const resData = await response.json();
+        const rawText = resData.choices[0]?.message?.content?.trim() || '[]';
+        // 去掉 markdown code fence（Claude 有時會包 ```json ... ```）
+        const text = rawText.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+        // 提取 JSON 陣列：找第一個 [ 到對應的 ]
         const jsonStr = (() => {
           let depth = 0, start = -1;
           for (let i = 0; i < text.length; i++) {
-            if (text[i] === '[' && start === -1) {
-              const next = text[i + 1];
-              if (next === '{' || next === '[') { start = i; depth = 1; }
-            } else if (start !== -1) {
-              if (text[i] === '[') depth++;
-              else if (text[i] === ']') { if (--depth === 0) return text.slice(start, i + 1); }
+            if (text[i] === '[') {
+              if (start === -1) { start = i; depth = 1; }
+              else depth++;
+            } else if (text[i] === ']' && start !== -1) {
+              if (--depth === 0) return text.slice(start, i + 1);
             }
           }
           return null;
@@ -276,7 +284,7 @@ Example input:
 }
 
 // ── Puppeteer 爬取分類頁 ──
-async function scrapeCategoryPage(url, platform) {
+async function scrapeCategoryPage(url, platform, maxPages = 1) {
   const puppeteer = require('puppeteer-extra');
   const StealthPlugin = require('puppeteer-extra-plugin-stealth');
   puppeteer.use(StealthPlugin());
@@ -305,7 +313,7 @@ async function scrapeCategoryPage(url, platform) {
     await new Promise(r => setTimeout(r, 3000));
 
     if (platform === 'watsons') {
-      return await page.evaluate(() => {
+      const extractWatsons = () => page.evaluate(() => {
         const extractNums = (text) => {
           if (!text) return [];
           const matches = text.match(/\d[\d,]*/g) || [];
@@ -313,20 +321,15 @@ async function scrapeCategoryPage(url, platform) {
             .map(s => Number(String(s).replace(/,/g, '')))
             .filter(n => Number.isFinite(n) && n > 0);
         };
-
         return Array.from(document.querySelectorAll('.productContainer')).map(el => {
           const name = el.querySelector('.productName, .name')?.innerText?.trim() || '';
-
           const priceText = el.querySelector('.afterPromo-price, .productPrice')?.innerText?.trim() || '';
           const origText  = el.querySelector('.afPromo-originPrice, .productOriginalPrice')?.innerText?.trim() || '';
-
           const numsPrice = extractNums(priceText);
           const numsOrig  = extractNums(origText);
-
           let price = numsPrice[0] ?? null;
           let origPrice = numsOrig[0] ?? null;
           if (!origPrice && numsPrice.length >= 2) origPrice = numsPrice[1];
-
           // 跳過 badge/icon 圖，取第一張商品圖（src 包含 prodcat 或 publishing）
           const imgs = Array.from(el.querySelectorAll('img'));
           const prodImg = imgs.find(i => {
@@ -335,10 +338,31 @@ async function scrapeCategoryPage(url, platform) {
           });
           const imageUrl = prodImg?.src || prodImg?.dataset?.src || '';
           const productUrl = el.querySelector('a[href]')?.href || '';
-
           return { name, price, origPrice, imageUrl, productUrl };
         }).filter(p => p.name);
       });
+
+      // 去掉 URL 中的 currentPage 參數，逐頁爬取
+      let baseUrl;
+      try {
+        const u = new URL(url);
+        u.searchParams.delete('currentPage');
+        baseUrl = u.toString();
+      } catch { baseUrl = url; }
+      const sep = baseUrl.includes('?') ? '&' : '?';
+      const pageLimit = maxPages === 0 ? 30 : maxPages; // 0 = 全部（上限 30 頁）
+
+      const allProducts = [];
+      let pageProds = await extractWatsons(); // 第 0 頁已由上方 goto 載入
+      allProducts.push(...pageProds);
+
+      for (let p = 1; p < pageLimit && pageProds.length > 0; p++) {
+        await page.goto(`${baseUrl}${sep}currentPage=${p}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await new Promise(r => setTimeout(r, 2500));
+        pageProds = await extractWatsons();
+        allProducts.push(...pageProds);
+      }
+      return allProducts;
     }
 
     if (platform === 'cosmed') {
@@ -347,7 +371,8 @@ async function scrapeCategoryPage(url, platform) {
         await page.waitForSelector('.product-card__vertical__wrapper', { timeout: 20000 });
       } catch {}
       let prev = 0;
-      for (let i = 0; i < 15; i++) {
+      const cosmedScrolls = maxPages === 0 ? 60 : Math.max(15, maxPages * 12);
+      for (let i = 0; i < cosmedScrolls; i++) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         await new Promise(r => setTimeout(r, 1500));
         const cur = await page.evaluate(() => document.querySelectorAll('.product-card__vertical__wrapper').length);
@@ -388,12 +413,17 @@ async function scrapeCategoryPage(url, platform) {
     if (platform === 'poya') {
       // POYA（91app）分類頁：等待商品卡出現，支援多種 href 格式
       const POYA_CARD_SEL = 'a[href*="SalePage"]';
-      try {
-        await page.waitForSelector(POYA_CARD_SEL, { timeout: 20000 });
-        // 觸發懶載入
+      try { await page.waitForSelector(POYA_CARD_SEL, { timeout: 20000 }); } catch {}
+
+      const poyaScrolls = maxPages === 0 ? 60 : Math.max(3, maxPages * 8);
+      let poyaPrev = 0;
+      for (let i = 0; i < poyaScrolls; i++) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         await new Promise(r => setTimeout(r, 1500));
-      } catch {}
+        const cur = await page.evaluate(() => document.querySelectorAll('a[href*="SalePage"]').length);
+        if (cur === poyaPrev && i > 0) break;
+        poyaPrev = cur;
+      }
 
       return await page.evaluate(() => {
         const extractPrices = (text) => {
@@ -466,14 +496,12 @@ async function scrapeCategoryPage(url, platform) {
   }
 }
 
-// ── 語義備援：用 llama-3.3-70b-versatile 比對跨平台辨識失敗的商品 ──
+// ── 語義備援：用 Claude Haiku 比對跨平台辨識失敗的商品 ──
 // 回傳 Map<item.name, existingProduct>，只包含成功比對的項目
 async function semanticFallback(unmatchedItems, existingProducts) {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey || unmatchedItems.length === 0) return new Map();
 
-  const Groq = require('groq-sdk');
-  const groq = new Groq({ apiKey });
   const result = new Map();
 
   // 為每個 item 準備候選清單（brand 相同 OR 字元重疊度 > 0.2，最多 8 筆）
@@ -489,7 +517,7 @@ async function semanticFallback(unmatchedItems, existingProducts) {
   }
 
   if (tasks.length === 0) return result;
-  logger.info(`[語義備援] ${tasks.length} 筆商品送 llama-3.3-70b-versatile 比對`);
+  logger.info(`[語義備援] ${tasks.length} 筆商品送 claude-haiku-4-5 比對`);
 
   const BATCH = 8;
   for (let i = 0; i < tasks.length; i += BATCH) {
@@ -525,13 +553,19 @@ ${candsDesc}
     let attempt = 0;
     while (attempt < 2) {
       try {
-        const res = await groq.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0,
-          max_tokens: 300,
+        const sfResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'anthropic/claude-haiku-4-5',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0,
+            max_tokens: 300,
+          }),
         });
-        const text = res.choices[0]?.message?.content?.trim() || '[]';
+        if (!sfResp.ok) throw new Error(`HTTP ${sfResp.status}`);
+        const sfData = await sfResp.json();
+        const text = sfData.choices[0]?.message?.content?.trim() || '[]';
         const jsonStr = (() => {
           let depth = 0, start = -1;
           for (let ci = 0; ci < text.length; ci++) {
@@ -707,6 +741,153 @@ async function matchAndUpdate(scrapedProducts, platform, sharedAiMap = null) {
   return { total: scrapedProducts.length, added, updated, priceChanges };
 }
 
+// ── 跨平台整批比對寫入（取代 Phase 3 逐平台 matchAndUpdate）──
+// allJobs: [{ jobId, platform, label, products }]
+// sharedAiMap: parseNamesWithAI 已解析好的結果 Map
+async function bulkMatchAndWrite(allJobs, sharedAiMap) {
+  const db = getDB();
+
+  // 一次讀取所有現有商品與 URL（不在 loop 內重複讀）
+  const existing = db.prepare('SELECT id, name, base_name, variant, brand FROM products WHERE is_active=1').all();
+  const urlRows  = db.prepare('SELECT url, product_id FROM product_urls').all();
+  const urlMap   = new Map(urlRows.map(r => [r.url, r.product_id]));
+
+  // 整理所有平台有效商品
+  const allItems = [];
+  for (const { platform, products } of allJobs) {
+    for (const item of products.filter(p => p.price)) {
+      const parsed   = sharedAiMap.get(item.name);
+      const baseName = parsed?.baseName || item.name;
+      const itemVar  = parsed?.variant  || null;
+      allItems.push({ item, platform, parsed, baseName, itemVar });
+    }
+  }
+
+  // Pass 1：URL 完全比對（最可靠，零 AI 費用）
+  const unmatch1 = [];
+  for (const entry of allItems) {
+    if (entry.item.productUrl && urlMap.has(entry.item.productUrl)) {
+      const ep = existing.find(e => e.id === urlMap.get(entry.item.productUrl));
+      if (ep) { entry.matchedProduct = ep; continue; }
+    }
+    unmatch1.push(entry);
+  }
+
+  // Pass 2：base_name 完全比對
+  const unmatch2 = [];
+  for (const entry of unmatch1) {
+    const ep = existing.find(e => e.base_name === entry.baseName);
+    if (ep) { entry.matchedProduct = ep; continue; }
+    unmatch2.push(entry);
+  }
+
+  // Pass 3：AI 語義比對（只與 existing 比，不和本次新爬的商品互比）
+  const sfItems = unmatch2.map(e => ({ item: e.item, itemBase: e.baseName, parsed: e.parsed }));
+  const semanticMap = sfItems.length > 0 ? await semanticFallback(sfItems, existing) : new Map();
+
+  const newItems = [];
+  for (const entry of unmatch2) {
+    const matched = semanticMap.get(entry.item.name);
+    if (matched) { entry.matchedProduct = matched; }
+    else { newItems.push(entry); }
+  }
+
+  // 新商品：相同 base_name 跨平台 → 合併成一筆 product
+  const newByBase = new Map(); // baseName → [entry]
+  for (const entry of newItems) {
+    if (!newByBase.has(entry.baseName)) newByBase.set(entry.baseName, []);
+    newByBase.get(entry.baseName).push(entry);
+  }
+
+  const insertPrice = db.prepare(`
+    INSERT INTO price_records (id, product_id, platform, price, original_price, discount_label, in_stock)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+  `);
+
+  let added = 0, updated = 0;
+  const alertQueue   = [];
+  const priceDoneKey = new Set(); // productId::platform，避免同一商品同平台重複
+  const newProductIds = [];
+
+  db.transaction(() => {
+    // 處理比對成功的商品
+    for (const { item, platform, parsed, itemVar, matchedProduct } of allItems) {
+      if (!matchedProduct) continue;
+      const pk = `${matchedProduct.id}::${platform}`;
+      if (priceDoneKey.has(pk)) continue;
+      priceDoneKey.add(pk);
+
+      // 若舊 base_name 等於 name（未解析過），補上 AI 結果
+      if (matchedProduct.base_name === matchedProduct.name && parsed?.baseName && parsed.baseName !== matchedProduct.name) {
+        db.prepare('UPDATE products SET base_name=?, brand=?, variant=? WHERE id=?')
+          .run(parsed.baseName, parsed.brand || matchedProduct.brand || '', itemVar || '', matchedProduct.id);
+      }
+
+      const latest = db.prepare(`SELECT price FROM price_records WHERE product_id=? AND platform=? ORDER BY scraped_at DESC LIMIT 1`).get(matchedProduct.id, platform);
+      if (latest && latest.price !== item.price) {
+        insertPrice.run(uuidv4(), matchedProduct.id, platform, item.price, item.origPrice ?? null, null);
+        alertQueue.push({ product: { id: matchedProduct.id, name: matchedProduct.name, brand: matchedProduct.brand || '' }, platform, newPrice: item.price, oldPrice: latest.price });
+        updated++;
+      } else if (!latest) {
+        insertPrice.run(uuidv4(), matchedProduct.id, platform, item.price, item.origPrice ?? null, null);
+        added++;
+      }
+
+      if (item.productUrl) {
+        const eu = db.prepare('SELECT id FROM product_urls WHERE product_id=? AND platform=?').get(matchedProduct.id, platform);
+        if (eu) db.prepare('UPDATE product_urls SET url=? WHERE id=?').run(item.productUrl, eu.id);
+        else db.prepare('INSERT INTO product_urls (id, product_id, platform, url) VALUES (?,?,?,?)').run(uuidv4(), matchedProduct.id, platform, item.productUrl);
+      }
+    }
+
+    // 處理全新商品（同 base_name 跨平台合併為一筆）
+    for (const [baseName, entries] of newByBase) {
+      const first     = entries[0];
+      const productId = uuidv4();
+      const brand     = first.parsed?.brand || '';
+      const imageUrl  = entries.map(e => e.item.imageUrl).find(Boolean) || null;
+
+      db.prepare(`INSERT INTO products (id, name, base_name, variant, brand, category, emoji, image_url, is_active) VALUES (?,?,?,?,?,'唇膏','💄',?,1)`)
+        .run(productId, first.item.name, baseName, first.itemVar, brand, imageUrl);
+
+      const seenPf = new Set();
+      for (const { item, platform } of entries) {
+        if (seenPf.has(platform)) continue; // 同平台只取第一筆
+        seenPf.add(platform);
+        insertPrice.run(uuidv4(), productId, platform, item.price, item.origPrice ?? null, null);
+        if (item.productUrl)
+          db.prepare('INSERT INTO product_urls (id, product_id, platform, url) VALUES (?,?,?,?)').run(uuidv4(), productId, platform, item.productUrl);
+      }
+
+      newProductIds.push({ id: productId, name: first.item.name });
+      added++;
+    }
+  })();
+
+  // 觸發價格警示
+  for (const { product, platform, newPrice, oldPrice } of alertQueue) {
+    await AlertService.checkPriceChange(product, platform, newPrice, oldPrice)
+      .catch(err => logger.warn(`[批次] 警示失敗: ${err.message}`));
+  }
+
+  // 補救：新商品若未解析，重送 AI
+  const unresolved = newProductIds.map(({ id, name }) =>
+    getDB().prepare("SELECT id, name FROM products WHERE id=? AND (base_name=name OR brand IS NULL OR brand='')").get(id)
+  ).filter(Boolean);
+  if (unresolved.length > 0) {
+    logger.info(`[批次補救] ${unresolved.length} 筆未解析，重送 AI`);
+    const fixMap = await parseNamesWithAI(unresolved.map(r => r.name));
+    const fixStmt = getDB().prepare('UPDATE products SET base_name=?, brand=?, variant=? WHERE id=?');
+    for (const row of unresolved) {
+      const p = fixMap.get(row.name);
+      if (p?.baseName && p.baseName !== row.name)
+        fixStmt.run(p.baseName, p.brand || '', p.variant || '', row.id);
+    }
+  }
+
+  return { added, updated, total: allItems.length };
+}
+
 // ═══════════════════════════════════════════════════════
 //  診斷 API
 // ═══════════════════════════════════════════════════════
@@ -822,11 +1003,12 @@ router.get('/urls', (req, res) => {
 
 // POST /api/scraper/urls — 新增監控網址
 router.post('/urls', (req, res) => {
-  const { url, label } = req.body;
+  const { url, label, maxPages } = req.body;
   if (!url) return res.status(400).json({ error: 'URL 必填' });
   const platform = detectPlatform(url);
   if (!platform) return res.status(400).json({ error: '不支援的平台（目前支援屈臣氏、康是美、寶雅）' });
 
+  const parsedMax = Number(maxPages);
   const s = loadSchedule();
   const newEntry = {
     id:       uuidv4(),
@@ -835,6 +1017,7 @@ router.post('/urls', (req, res) => {
     label:    label || `${PLATFORM_LABEL[platform]} ${new Date().toLocaleDateString('zh-TW')}`,
     enabled:  true,
     addedAt:  new Date().toISOString(),
+    maxPages: (Number.isFinite(parsedMax) && parsedMax >= 0) ? parsedMax : 1,
   };
   s.urls.push(newEntry);
   saveSchedule(s);
@@ -854,6 +1037,10 @@ router.patch('/urls/:id', (req, res) => {
     if (!newPlatform) return res.status(400).json({ error: '無法辨識平台（支援屈臣氏、康是美、寶雅）' });
     entry.url = req.body.url;
     entry.platform = newPlatform;
+  }
+  if (req.body.maxPages !== undefined) {
+    const p = Number(req.body.maxPages);
+    if (Number.isFinite(p) && p >= 0) entry.maxPages = p;
   }
   saveSchedule(s);
   applySchedule(s);
@@ -960,7 +1147,7 @@ async function runBatchScrapeJob() {
     const jobId = uuidv4();
     getDB().prepare(`INSERT INTO scrape_jobs (id, platform, status, target_url) VALUES (?, ?, 'running', ?)`).run(jobId, item.platform, item.url);
     try {
-      const products = await scrapeCategoryPage(item.url, item.platform);
+      const products = await scrapeCategoryPage(item.url, item.platform, item.maxPages ?? 1);
       jobs.push({ jobId, platform: item.platform, label: item.label, products });
       scrapeProgress.current++;
       scrapeProgress.message = `爬取中：${item.label || item.platform}（${scrapeProgress.current}/${scrapeProgress.total}）`;
@@ -977,32 +1164,46 @@ async function runBatchScrapeJob() {
   logger.info(`[批次] Phase 2：AI 解析 ${allNames.length} 個不重複名稱`);
   const aiTotalBatches = Math.ceil(allNames.length / AI_BATCH_SIZE);
   scrapeProgress = { running: true, phase: 'ai', current: 0, total: aiTotalBatches, message: `AI 解析中（0/${aiTotalBatches} 批）...` };
-  const sharedAiMap = await parseNamesWithAI(allNames, 'llama-3.1-8b-instant', null, (done, total) => {
+  const sharedAiMap = await parseNamesWithAI(allNames, null, null, (done, total) => {
     scrapeProgress.current = done;
     scrapeProgress.message = `AI 解析中（${done}/${total} 批）`;
   });
   logger.info(`[批次] AI 解析完成，${sharedAiMap.size} 筆成功`);
 
-  // Phase 3：逐平台比對分類寫入
-  logger.info(`[批次] Phase 3：比對寫入資料庫`);
-  scrapeProgress = { running: true, phase: 'saving', current: 0, total: jobs.length, message: '寫入資料庫...' };
-  const results = [];
-  for (const { jobId, platform, label, products } of jobs) {
-    try {
-      const result = await matchAndUpdate(products, platform, sharedAiMap);
-      getDB().prepare(`UPDATE scrape_jobs SET status='success', products_scraped=?, finished_at=datetime('now','localtime') WHERE id=?`).run(result.total, jobId);
-      results.push({ platform, label, status: 'success', total: result.total, added: result.added, updated: result.updated });
-      scrapeProgress.current++;
-      logger.info(`[批次] ${platform} 完成：新增 ${result.added}，更新 ${result.updated}`);
-    } catch (err) {
-      getDB().prepare(`UPDATE scrape_jobs SET status='failed', error_detail=?, finished_at=datetime('now','localtime') WHERE id=?`).run(err.message, jobId);
-      results.push({ platform, label, status: 'failed', error: err.message });
-      scrapeProgress.current++;
+  // Phase 3：整批跨平台比對寫入（讀一次 DB，全部平台一起處理）
+  logger.info(`[批次] Phase 3：整批比對寫入資料庫`);
+  scrapeProgress = { running: true, phase: 'saving', current: 0, total: 1, message: '寫入資料庫...' };
+  let bulkResult = { added: 0, updated: 0, total: 0 };
+  let phase3Failed = false;
+  try {
+    bulkResult = await bulkMatchAndWrite(jobs, sharedAiMap);
+    for (const { jobId, products } of jobs) {
+      getDB().prepare(`UPDATE scrape_jobs SET status='success', products_scraped=?, finished_at=datetime('now','localtime') WHERE id=?`)
+        .run(products.filter(p => p.price).length, jobId);
     }
+    logger.info(`[批次] Phase 3 完成：新增 ${bulkResult.added}，更新 ${bulkResult.updated}，共 ${bulkResult.total} 筆`);
+  } catch (err) {
+    phase3Failed = true;
+    for (const { jobId } of jobs) {
+      getDB().prepare(`UPDATE scrape_jobs SET status='failed', error_detail=?, finished_at=datetime('now','localtime') WHERE id=?`)
+        .run(err.message, jobId);
+    }
+    logger.error(`[批次] Phase 3 失敗: ${err.message}`);
   }
 
+  const results = jobs.map(({ platform, label }) => ({
+    platform, label,
+    status: phase3Failed ? 'failed' : 'success',
+    total: bulkResult.total, added: bulkResult.added, updated: bulkResult.updated,
+  }));
+
   scrapeProgress = { running: false, phase: 'done', current: enabledUrls.length, total: enabledUrls.length, message: '完成！' };
-  return { total: enabledUrls.length, success: results.filter(r => r.status === 'success').length, failed: results.filter(r => r.status === 'failed').length, results };
+  return {
+    total: enabledUrls.length,
+    success: phase3Failed ? 0 : jobs.length,
+    failed: phase3Failed ? jobs.length : 0,
+    results,
+  };
 }
 
 // POST /api/scraper/run-enabled — 啟動批次背景抓取
@@ -1022,6 +1223,76 @@ router.post('/run-enabled', (req, res) => {
 // GET /api/scraper/progress
 router.get('/progress', (req, res) => {
   res.json(scrapeProgress);
+});
+
+// POST /api/scraper/reclassify-all — 重新解析所有商品的 brand/base_name，並合併重複商品
+router.post('/reclassify-all', async (req, res) => {
+  res.json({ message: '重新分類已啟動，請查看後端 log 追蹤進度' });
+
+  try {
+    const db = getDB();
+    const products = db.prepare("SELECT id, name FROM products WHERE is_active=1 ORDER BY created_at ASC").all();
+    logger.info(`[重新分類] 共 ${products.length} 筆商品，開始 AI 解析`);
+
+    // Step 1：批次 AI 重新解析所有名稱
+    const names = products.map(p => p.name);
+    const aiMap = await parseNamesWithAI(names);
+    logger.info(`[重新分類] AI 解析完成，${aiMap.size} 筆成功`);
+
+    // Step 2：更新每筆的 brand / base_name / variant
+    const updateStmt = db.prepare('UPDATE products SET base_name=?, brand=?, variant=? WHERE id=?');
+    db.transaction(() => {
+      for (const p of products) {
+        const parsed = aiMap.get(p.name);
+        if (parsed?.baseName) {
+          updateStmt.run(parsed.baseName, parsed.brand || '', parsed.variant || '', p.id);
+        }
+      }
+    })();
+    logger.info(`[重新分類] brand/base_name 更新完成`);
+
+    // Step 3：偵測相同 base_name 的重複商品，合併後停用多餘那筆
+    const updated = db.prepare("SELECT id, name, base_name FROM products WHERE is_active=1 ORDER BY created_at ASC").all();
+    const seenBase = new Map(); // base_name → keepId
+    const mergeMap = new Map(); // dupId → keepId
+
+    for (const p of updated) {
+      const key = (p.base_name || p.name).trim();
+      if (!seenBase.has(key)) {
+        seenBase.set(key, p.id);
+      } else {
+        mergeMap.set(p.id, seenBase.get(key));
+      }
+    }
+
+    if (mergeMap.size > 0) {
+      logger.info(`[重新分類] 偵測到 ${mergeMap.size} 筆重複，開始合併`);
+      db.transaction(() => {
+        for (const [dupId, keepId] of mergeMap) {
+          // 把 price_records 移到 keepId
+          db.prepare('UPDATE price_records SET product_id=? WHERE product_id=?').run(keepId, dupId);
+          // 把 product_urls 移過去（跳過平台已存在的）
+          const dupUrls = db.prepare('SELECT id, platform FROM product_urls WHERE product_id=?').all(dupId);
+          for (const u of dupUrls) {
+            const exists = db.prepare('SELECT id FROM product_urls WHERE product_id=? AND platform=?').get(keepId, u.platform);
+            if (!exists) {
+              db.prepare('UPDATE product_urls SET product_id=? WHERE id=?').run(keepId, u.id);
+            }
+          }
+          // 停用重複商品
+          db.prepare('UPDATE products SET is_active=0 WHERE id=?').run(dupId);
+        }
+      })();
+      logger.info(`[重新分類] 合併完成，${mergeMap.size} 筆重複商品已停用`);
+    } else {
+      logger.info(`[重新分類] 無重複商品`);
+    }
+
+    const finalCount = db.prepare("SELECT COUNT(*) as c FROM products WHERE is_active=1").get().c;
+    logger.info(`[重新分類] 全部完成，目前活躍商品 ${finalCount} 筆`);
+  } catch (err) {
+    logger.error(`[重新分類] 失敗: ${err.message}\n${err.stack}`);
+  }
 });
 
 // GET /api/scraper/status

@@ -12,6 +12,7 @@
     "@line/bot-sdk": "^9.3.0",
     "axios": "^1.7.2",
     "better-sqlite3": "^12.8.0",
+    "chrome-cookies-secure": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

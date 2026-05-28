@@ -73,13 +73,15 @@ export default function ScraperPage({ isOnline, toast }) {
 
   // ── 監控網址清單 ──
   const [urlList,    setUrlList]    = useState([])
-  const [newUrl,     setNewUrl]     = useState('')
-  const [newLabel,   setNewLabel]   = useState('')
-  const [addLoading, setAddLoading] = useState(false)
-  const [editId,     setEditId]     = useState(null)     // 目前正在編輯的 URL id
-  const [editLabel,  setEditLabel]  = useState('')       // 編輯中的名稱
-  const [editUrl,    setEditUrl]    = useState('')       // 編輯中的網址
-  const [editSaving, setEditSaving] = useState(false)
+  const [newUrl,      setNewUrl]      = useState('')
+  const [newLabel,    setNewLabel]    = useState('')
+  const [newMaxPages, setNewMaxPages] = useState(1)
+  const [addLoading,  setAddLoading]  = useState(false)
+  const [editId,       setEditId]       = useState(null)
+  const [editLabel,    setEditLabel]    = useState('')
+  const [editUrl,      setEditUrl]      = useState('')
+  const [editMaxPages, setEditMaxPages] = useState(1)
+  const [editSaving,   setEditSaving]   = useState(false)
   const [runningId,  setRunningId]  = useState(null)   // 正在執行的 URL id
   const [runLogs,    setRunLogs]    = useState({})      // { [id]: [...log] }
 
@@ -94,17 +96,31 @@ export default function ScraperPage({ isOnline, toast }) {
   const [history,     setHistory]     = useState([])
   const [histLoading, setHistLoading] = useState(false)
 
+  // ── 蝦皮授權 ──
+  const [shopeeStatus,  setShopeeStatus]  = useState(null)
+  const [shopeeLoading, setShopeeLoading] = useState(false)
+
+  // ── Apify 蝦皮關鍵字搜尋 ──
+  const [apifyKeyword,    setApifyKeyword]    = useState('')
+  const [apifyMax,        setApifyMax]        = useState(20)
+  const [apifySort,       setApifySort]       = useState('relevancy')
+  const [apifyLoading,    setApifyLoading]    = useState(false)
+  const [apifyResults,    setApifyResults]    = useState(null)
+  const [apifyError,      setApifyError]      = useState('')
+
   const newPlatform = detectPlatform(newUrl)
 
   const loadAll = useCallback(async () => {
     if (!isOnline) return
     try {
-      const [urls, sched, hist, status] = await Promise.all([
+      const [urls, sched, hist, status, shopee] = await Promise.all([
           api.getScraperUrls(),
           api.getSchedule(),
           api.getScraperHistory(10),
           api.getScraperStatus(),
+          api.getShopeeAuthStatus(),
         ])
+      if (shopee) setShopeeStatus(shopee)
       if (urls)  setUrlList(urls)
       if (sched) setSchedule({ enabled: sched.enabled, time: sched.time, days: sched.days })
       if (hist)  setHistory(hist)
@@ -125,10 +141,11 @@ export default function ScraperPage({ isOnline, toast }) {
     if (!isOnline)        { toast('後端離線', 'error'); return }
     setAddLoading(true)
     try {
-      const entry = await api.addScraperUrl(newUrl.trim(), newLabel.trim() || undefined)
+      const entry = await api.addScraperUrl(newUrl.trim(), newLabel.trim() || undefined, newMaxPages)
       setUrlList(prev => [...prev, entry])
       setNewUrl('')
       setNewLabel('')
+      setNewMaxPages(1)
       toast(`已新增「${entry.label}」`, 'success')
     } catch (err) {
       toast(`新增失敗：${err.message}`, 'error')
@@ -164,12 +181,14 @@ export default function ScraperPage({ isOnline, toast }) {
     setEditId(entry.id)
     setEditLabel(entry.label || '')
     setEditUrl(entry.url || '')
+    setEditMaxPages(entry.maxPages ?? 1)
   }
 
   function cancelEdit() {
     setEditId(null)
     setEditLabel('')
     setEditUrl('')
+    setEditMaxPages(1)
     setEditSaving(false)
   }
 
@@ -179,11 +198,11 @@ export default function ScraperPage({ isOnline, toast }) {
     const nextUrl   = editUrl.trim()
     if (!nextLabel) { toast('自訂名稱不可為空', 'error'); return }
     if (!nextUrl)   { toast('網址不可為空', 'error'); return }
-    if (nextLabel === entry.label && nextUrl === entry.url) { cancelEdit(); return }
+    if (nextLabel === entry.label && nextUrl === entry.url && editMaxPages === (entry.maxPages ?? 1)) { cancelEdit(); return }
 
     setEditSaving(true)
     try {
-      const body = { label: nextLabel }
+      const body = { label: nextLabel, maxPages: editMaxPages }
       if (nextUrl !== entry.url) body.url = nextUrl
       const res = await fetch(`/api/scraper/urls/${entry.id}`, {
         method: 'PATCH',
@@ -195,7 +214,7 @@ export default function ScraperPage({ isOnline, toast }) {
         throw new Error(err.error || `HTTP ${res.status}`)
       }
       const updated = await res.json()
-      setUrlList(prev => prev.map(u => u.id === entry.id ? { ...u, label: updated.label, url: updated.url, platform: updated.platform } : u))
+      setUrlList(prev => prev.map(u => u.id === entry.id ? { ...u, label: updated.label, url: updated.url, platform: updated.platform, maxPages: updated.maxPages } : u))
       toast('已更新', 'success')
       cancelEdit()
     } catch (err) {
@@ -284,6 +303,39 @@ export default function ScraperPage({ isOnline, toast }) {
     setSchedSaving(false)
   }
 
+  // ── 蝦皮授權 handler ──
+  async function handleShopeeImport() {
+    if (!isOnline) { toast('後端離線', 'error'); return }
+    setShopeeLoading(true)
+    try {
+      const res = await api.importShopeeAuth()
+      toast(res.message, 'success')
+      const status = await api.getShopeeAuthStatus()
+      setShopeeStatus(status)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setShopeeLoading(false)
+    }
+  }
+
+  // ── Apify 搜尋 handler ──
+  async function handleApifySearch() {
+    if (!apifyKeyword.trim()) { toast('請輸入搜尋關鍵字', 'error'); return }
+    if (!isOnline) { toast('後端離線', 'error'); return }
+    setApifyLoading(true)
+    setApifyResults(null)
+    setApifyError('')
+    try {
+      const data = await api.apifyShopeeSearch(apifyKeyword.trim(), apifyMax, apifySort)
+      setApifyResults(data)
+    } catch (err) {
+      setApifyError(err.message)
+    } finally {
+      setApifyLoading(false)
+    }
+  }
+
   const enabledUrls = urlList.filter(u => u.enabled)
 
   return (
@@ -323,6 +375,25 @@ export default function ScraperPage({ isOnline, toast }) {
             onChange={e => setNewLabel(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAdd()}
           />
+          <select
+            value={newMaxPages}
+            onChange={e => setNewMaxPages(Number(e.target.value))}
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8, padding: '6px 10px',
+              color: 'var(--text-primary)', fontSize: 13,
+              fontFamily: 'DM Mono, monospace',
+              cursor: 'pointer', outline: 'none',
+              minWidth: 90,
+            }}
+          >
+            <option value={1} style={{ background: '#1a1630' }}>1 頁</option>
+            <option value={3} style={{ background: '#1a1630' }}>3 頁</option>
+            <option value={5} style={{ background: '#1a1630' }}>5 頁</option>
+            <option value={10} style={{ background: '#1a1630' }}>10 頁</option>
+            <option value={0} style={{ background: '#1a1630' }}>全部</option>
+          </select>
           <button
             className="btn btn-primary"
             onClick={handleAdd}
@@ -377,6 +448,28 @@ export default function ScraperPage({ isOnline, toast }) {
                           onKeyDown={e => e.key === 'Enter' && saveEdit(entry)}
                           disabled={editSaving}
                         />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>爬取頁數</span>
+                          <select
+                            value={editMaxPages}
+                            onChange={e => setEditMaxPages(Number(e.target.value))}
+                            disabled={editSaving}
+                            style={{
+                              background: 'rgba(255,255,255,0.05)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: 8, padding: '4px 8px',
+                              color: 'var(--text-primary)', fontSize: 12,
+                              fontFamily: 'DM Mono, monospace',
+                              cursor: 'pointer', outline: 'none',
+                            }}
+                          >
+                            <option value={1} style={{ background: '#1a1630' }}>1 頁</option>
+                            <option value={3} style={{ background: '#1a1630' }}>3 頁</option>
+                            <option value={5} style={{ background: '#1a1630' }}>5 頁</option>
+                            <option value={10} style={{ background: '#1a1630' }}>10 頁</option>
+                            <option value={0} style={{ background: '#1a1630' }}>全部</option>
+                          </select>
+                        </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button
                             className="btn btn-primary"
@@ -409,8 +502,14 @@ export default function ScraperPage({ isOnline, toast }) {
                       </div>
                     )}
                     {editId !== entry.id && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, wordBreak: 'break-all' }}>
-                        {shortUrl(entry.url)}
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ wordBreak: 'break-all' }}>{shortUrl(entry.url)}</span>
+                        <span style={{
+                          background: 'rgba(155,109,202,0.15)', color: 'var(--amethyst-light)',
+                          borderRadius: 4, padding: '1px 6px', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0,
+                        }}>
+                          {entry.maxPages === 0 ? '全部頁' : `${entry.maxPages ?? 1} 頁`}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -592,7 +691,235 @@ export default function ScraperPage({ isOnline, toast }) {
       </div>
 
       {/* ══════════════════════════════════════════════
-          三、執行歷史
+          三、蝦皮帳號授權
+      ══════════════════════════════════════════════ */}
+      <div className="card" style={{ padding: '20px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div className="section-title" style={{ margin: 0 }}>蝦皮帳號授權</div>
+          {shopeeStatus?.connected ? (
+            <span style={{ fontSize: 11, background: 'rgba(74,222,128,0.15)', color: '#4ade80', borderRadius: 6, padding: '2px 8px' }}>
+              已連線
+            </span>
+          ) : (
+            <span style={{ fontSize: 11, background: 'rgba(248,113,113,0.15)', color: '#f87171', borderRadius: 6, padding: '2px 8px' }}>
+              未授權
+            </span>
+          )}
+        </div>
+
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.8 }}>
+          請先用 Chrome 開啟過 <strong style={{ color: 'var(--text-primary)' }}>shopee.tw</strong> 一次，再點下方按鈕即可完成設定。
+        </div>
+
+        {shopeeStatus?.connected && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+            上次讀取：{shopeeStatus.savedAt?.slice(0, 10)}
+            {shopeeStatus.daysSince !== null && `（${shopeeStatus.daysSince} 天前）`}
+          </div>
+        )}
+
+        <button
+          className="btn btn-primary"
+          onClick={handleShopeeImport}
+          disabled={shopeeLoading}
+        >
+          {shopeeLoading ? '讀取中…' : shopeeStatus?.connected ? '重新讀取 Cookie' : '讀取 Chrome Cookie'}
+        </button>
+      </div>
+
+      {/* ══════════════════════════════════════════════
+          四、蝦皮關鍵字搜尋（Apify）
+      ══════════════════════════════════════════════ */}
+      <div className="card" style={{ padding: '20px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div className="section-title" style={{ margin: 0 }}>蝦皮關鍵字搜尋</div>
+          <span style={{
+            fontSize: 10, background: 'rgba(249,115,22,0.15)', color: '#fb923c',
+            borderRadius: 6, padding: '2px 8px', fontWeight: 500, letterSpacing: 0.5,
+          }}>Apify</span>
+        </div>
+
+        {/* 搜尋輸入列 */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
+          <input
+            className="input-styled"
+            style={{ flex: 2, minWidth: 200 }}
+            placeholder="輸入蝦皮搜尋關鍵字，例如：雪Q餅"
+            value={apifyKeyword}
+            onChange={e => setApifyKeyword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !apifyLoading && handleApifySearch()}
+            disabled={apifyLoading}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>筆數</div>
+            <select
+              value={apifyMax}
+              onChange={e => setApifyMax(Number(e.target.value))}
+              disabled={apifyLoading}
+              style={{
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8, padding: '6px 10px', color: 'var(--text-primary)',
+                fontSize: 13, fontFamily: 'DM Mono, monospace', cursor: 'pointer', outline: 'none',
+              }}
+            >
+              {[10, 20, 40, 60].map(n => (
+                <option key={n} value={n} style={{ background: '#1a1630' }}>{n} 筆</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>排序</div>
+            <select
+              value={apifySort}
+              onChange={e => setApifySort(e.target.value)}
+              disabled={apifyLoading}
+              style={{
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8, padding: '6px 10px', color: 'var(--text-primary)',
+                fontSize: 13, fontFamily: 'DM Mono, monospace', cursor: 'pointer', outline: 'none',
+              }}
+            >
+              <option value="relevancy"  style={{ background: '#1a1630' }}>相關度</option>
+              <option value="sales"      style={{ background: '#1a1630' }}>銷量</option>
+              <option value="price_asc"  style={{ background: '#1a1630' }}>價格低到高</option>
+              <option value="price_desc" style={{ background: '#1a1630' }}>價格高到低</option>
+            </select>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={handleApifySearch}
+            disabled={apifyLoading || !apifyKeyword.trim()}
+            style={{ alignSelf: 'flex-end' }}
+          >
+            {apifyLoading ? '搜尋中…' : '搜尋'}
+          </button>
+        </div>
+
+        {/* 載入中 */}
+        {apifyLoading && (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            <div style={{ marginBottom: 12 }}>透過 Apify 爬取蝦皮，最多需 1 分鐘…</div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div className="scrape-progress-track" style={{ width: 240 }}>
+                <div className="scrape-progress-indeterminate" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 錯誤 */}
+        {apifyError && !apifyLoading && (
+          <div style={{
+            background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)',
+            borderRadius: 8, padding: '10px 14px', color: '#f87171', fontSize: 13,
+          }}>
+            {apifyError}
+          </div>
+        )}
+
+        {/* 搜尋結果 */}
+        {apifyResults && !apifyLoading && (
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+              「{apifyResults.keyword}」共找到 <strong style={{ color: 'var(--text-primary)' }}>{apifyResults.count}</strong> 筆結果
+            </div>
+            {apifyResults.count === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                沒有找到相關商品
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+                {apifyResults.items.map((item, i) => (
+                  <a
+                    key={i}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <div style={{
+                      background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border)',
+                      borderRadius: 10, overflow: 'hidden', cursor: 'pointer',
+                      transition: 'border-color 0.2s',
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(155,109,202,0.5)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                    >
+                      {/* 商品圖片 */}
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }}
+                          onError={e => { e.target.style.display = 'none' }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%', aspectRatio: '1', background: 'rgba(255,255,255,0.04)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 28, color: 'var(--text-muted)',
+                        }}>🛍</div>
+                      )}
+
+                      {/* 商品資訊 */}
+                      <div style={{ padding: '10px 12px' }}>
+                        {/* 名稱 */}
+                        <div style={{
+                          fontSize: 12, lineHeight: 1.5, marginBottom: 8,
+                          overflow: 'hidden', display: '-webkit-box',
+                          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                          color: 'var(--text-primary)',
+                        }}>
+                          {item.name}
+                        </div>
+
+                        {/* 價格列 */}
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
+                          {item.price != null ? (
+                            <span style={{ fontSize: 15, fontWeight: 700, color: '#fb923c' }}>
+                              NT$ {item.price.toLocaleString()}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>—</span>
+                          )}
+                          {item.original_price != null && item.original_price !== item.price && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                              {item.original_price.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 標籤列 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {item.is_mall && (
+                            <span style={{
+                              fontSize: 10, background: 'rgba(249,115,22,0.15)', color: '#fb923c',
+                              borderRadius: 4, padding: '1px 5px', fontWeight: 500,
+                            }}>Mall</span>
+                          )}
+                          {item.rating != null && (
+                            <span style={{ fontSize: 11, color: '#facc15' }}>
+                              ★ {Number(item.rating).toFixed(1)}
+                            </span>
+                          )}
+                          {item.sold_count != null && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              售 {item.sold_count}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ══════════════════════════════════════════════
+          五、執行歷史
       ══════════════════════════════════════════════ */}
       <div className="card" style={{ padding: '20px 24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>

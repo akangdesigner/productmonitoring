@@ -44,7 +44,7 @@ export const api = {
   getScraperProgress: ()           => apiFetch('/api/scraper/progress'),
   getScraperHistory: (limit = 30)  => apiFetch(`/api/scraper/history?limit=${limit}`),
   getScraperUrls:   ()             => apiFetch('/api/scraper/urls'),
-  addScraperUrl:    (url, label)   => apiFetch('/api/scraper/urls', { method: 'POST', body: JSON.stringify({ url, label }) }),
+  addScraperUrl:    (url, label, maxPages) => apiFetch('/api/scraper/urls', { method: 'POST', body: JSON.stringify({ url, label, maxPages }) }),
   toggleScraperUrl: (id, enabled)  => apiFetch(`/api/scraper/urls/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
   deleteScraperUrl: (id)           => apiFetch(`/api/scraper/urls/${id}`, { method: 'DELETE' }),
   clearAllScraperUrls: ()          => apiFetch('/api/scraper/urls', { method: 'DELETE' }),
@@ -56,4 +56,8 @@ export const api = {
   getClientProducts: ()            => apiFetch('/api/my-products'),
   addClientProduct:  (p)           => apiFetch('/api/my-products', { method: 'POST', body: JSON.stringify(p) }),
   deleteClientProduct: (id)        => apiFetch(`/api/my-products/${id}`, { method: 'DELETE' }),
+  getShopeeAuthStatus: ()          => apiFetch('/api/shopee-auth/status'),
+  importShopeeAuth:    ()          => apiFetch('/api/shopee-auth/import', { method: 'POST' }),
+  apifyShopeeSearch:   (keyword, maxProducts = 20, sort = 'relevancy') =>
+    apiFetch('/api/apify/shopee', { method: 'POST', body: JSON.stringify({ keyword, maxProducts, sort }) }),
 };

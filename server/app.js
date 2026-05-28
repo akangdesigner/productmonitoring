@@ -22,7 +22,9 @@ app.use('/api/scraper',   require('./routes/scraper'));
 app.use('/api/line',      require('./routes/line'));
 app.use('/api/dashboard',    require('./routes/dashboard'));
 app.use('/api/my-products', require('./routes/clientProducts'));
-app.use('/api/search',     require('./routes/search'));
+app.use('/api/search',      require('./routes/search'));
+app.use('/api/shopee-auth', require('./routes/shopeeAuth'));
+app.use('/api/apify',      require('./routes/apify'));
 
 // ── SPA Fallback（React Router 用）──
 app.get('*', (req, res) => {

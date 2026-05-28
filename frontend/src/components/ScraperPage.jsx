@@ -117,6 +117,7 @@ export default function ScraperPage({ isOnline, toast }) {
   const [kwRunning,        setKwRunning]        = useState({})   // { [id]: true }
   const [kwSchedule,       setKwSchedule]       = useState({ enabled: true, time: '02:00' })
   const [kwSchedSaving,    setKwSchedSaving]    = useState(false)
+  const [kwNewInput,       setKwNewInput]       = useState('')
 
   const newPlatform = detectPlatform(newUrl)
 
@@ -328,6 +329,24 @@ export default function ScraperPage({ isOnline, toast }) {
       toast(err.message, 'error')
     } finally {
       setShopeeLoading(false)
+    }
+  }
+
+  // ── 追蹤清單直接新增關鍵字（不爬，之後排程或手動執行才抓） ──
+  async function handleKwDirectAdd() {
+    const keyword = kwNewInput.trim()
+    if (!keyword) return
+    setKwAddLoading(true)
+    try {
+      await api.addShopeeKeyword(keyword, 30, [])
+      const updated = await api.getShopeeKeywords()
+      setKwList(updated)
+      setKwNewInput('')
+      toast(`已新增「${keyword}」到追蹤清單`, 'success')
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setKwAddLoading(false)
     }
   }
 
@@ -1009,9 +1028,30 @@ export default function ScraperPage({ isOnline, toast }) {
           </button>
         </div>
 
+        {/* 直接新增關鍵字 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <input
+            className="input-styled"
+            style={{ flex: 1 }}
+            placeholder="直接輸入關鍵字加入追蹤，例如：戰鬥陀螺"
+            value={kwNewInput ?? ''}
+            onChange={e => setKwNewInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !kwAddLoading && kwNewInput?.trim() && handleKwDirectAdd()}
+            disabled={kwAddLoading}
+          />
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 13, whiteSpace: 'nowrap' }}
+            disabled={kwAddLoading || !kwNewInput?.trim()}
+            onClick={handleKwDirectAdd}
+          >
+            {kwAddLoading ? '新增中…' : '+ 新增'}
+          </button>
+        </div>
+
         {kwList.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-            尚無追蹤關鍵字 — 搜尋蝦皮後點「+ 加入追蹤」即可
+          <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            尚無追蹤關鍵字
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

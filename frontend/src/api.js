@@ -62,6 +62,8 @@ export const api = {
     apiFetch('/api/apify/shopee', { method: 'POST', body: JSON.stringify({ keyword, maxProducts, sort }) }),
 
   // 蝦皮關鍵字追蹤
+  getShopeeKeywordSchedule: () => apiFetch('/api/shopee-keywords/schedule'),
+  setShopeeKeywordSchedule: (s) => apiFetch('/api/shopee-keywords/schedule', { method: 'PUT', body: JSON.stringify(s) }),
   getShopeeKeywords:    ()    => apiFetch('/api/shopee-keywords'),
   addShopeeKeyword:     (keyword, max_products, schedule_type) =>
     apiFetch('/api/shopee-keywords', { method: 'POST', body: JSON.stringify({ keyword, max_products, schedule_type }) }),

@@ -2,11 +2,46 @@ const express = require('express');
 const router  = express.Router();
 const axios   = require('axios');
 const cron    = require('node-cron');
+const path    = require('path');
+const fs      = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../db');
 
-const ACTOR_ID = '4nhvc7lTKzkDrk7bD';
-const BASE_URL = 'https://api.apify.com/v2';
+const ACTOR_ID    = '4nhvc7lTKzkDrk7bD';
+const BASE_URL    = 'https://api.apify.com/v2';
+const SCHED_FILE  = path.join(__dirname, '../db/shopee-keyword-schedule.json');
+
+// ── 排程設定讀寫 ──
+function loadSchedule() {
+  try {
+    return JSON.parse(fs.readFileSync(SCHED_FILE, 'utf8'));
+  } catch {
+    return { enabled: true, time: '02:00' };
+  }
+}
+
+function saveSchedule(s) {
+  fs.writeFileSync(SCHED_FILE, JSON.stringify(s, null, 2), 'utf8');
+}
+
+// ── 動態 cron 管理 ──
+let cronTask = null;
+
+function buildCronExpr(time) {
+  const [hh, mm] = time.split(':').map(Number);
+  return `${mm} ${hh} * * *`;
+}
+
+function applySchedule(s) {
+  if (cronTask) { cronTask.stop(); cronTask = null; }
+  if (!s.enabled) return;
+  const expr = buildCronExpr(s.time);
+  cronTask = cron.schedule(expr, runAll, { timezone: 'Asia/Taipei' });
+  console.log(`[蝦皮排程] 已套用：每天 ${s.time}（${expr}）`);
+}
+
+// 啟動時載入排程
+applySchedule(loadSchedule());
 
 // ── 呼叫 Apify 搜尋蝦皮 ──
 async function fetchShopee(keyword, maxProducts = 30) {
@@ -48,7 +83,7 @@ async function fetchShopee(keyword, maxProducts = 30) {
   }));
 }
 
-// ── 執行單一關鍵字並存結果 ──
+// ── 執行單一關鍵字並存結果，回傳是否成功 ──
 async function runKeyword(kw) {
   const db = getDB();
   try {
@@ -78,35 +113,54 @@ async function runKeyword(kw) {
     `).run(kw.id, kw.id);
 
     console.log(`[蝦皮追蹤] "${kw.keyword}" 完成，${items.length} 筆`);
+    return { ok: true, count: items.length };
   } catch (err) {
     console.error(`[蝦皮追蹤] "${kw.keyword}" 失敗：`, err.message);
+    return { ok: false, error: err.message };
   }
 }
 
-// ── 獨立排程：每天凌晨 2:00 執行所有已啟用關鍵字 ──
-cron.schedule('0 2 * * *', async () => {
+// ── 排程批次執行所有啟用關鍵字 ──
+async function runAll() {
   const db = getDB();
-  const keywords = db.prepare(`
-    SELECT * FROM shopee_keywords WHERE enabled = 1 AND schedule_type = 'daily'
-  `).all();
+  const keywords = db.prepare('SELECT * FROM shopee_keywords WHERE enabled = 1').all();
   console.log(`[蝦皮排程] 開始執行，共 ${keywords.length} 個關鍵字`);
   for (const kw of keywords) {
     await runKeyword(kw);
   }
-}, { timezone: 'Asia/Taipei' });
+}
+
+// ═══════════════════════════════════════════════════
+// API 路由
+// ═══════════════════════════════════════════════════
+
+// ── GET /api/shopee-keywords/schedule ── 取得排程設定
+router.get('/schedule', (req, res) => {
+  res.json(loadSchedule());
+});
+
+// ── PUT /api/shopee-keywords/schedule ── 更新排程設定
+router.put('/schedule', (req, res) => {
+  const { enabled, time } = req.body;
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) {
+    return res.status(400).json({ error: '時間格式錯誤，請用 HH:MM' });
+  }
+  const s = { enabled: !!enabled, time };
+  saveSchedule(s);
+  applySchedule(s);
+  res.json({ ok: true, ...s });
+});
 
 // ── GET /api/shopee-keywords ── 取得所有追蹤關鍵字
 router.get('/', (req, res) => {
   const db = getDB();
-  const rows = db.prepare(`
-    SELECT * FROM shopee_keywords ORDER BY created_at DESC
-  `).all();
+  const rows = db.prepare('SELECT * FROM shopee_keywords ORDER BY created_at DESC').all();
   res.json(rows);
 });
 
 // ── POST /api/shopee-keywords ── 新增關鍵字
 router.post('/', (req, res) => {
-  const { keyword, max_products = 30, schedule_type = 'daily' } = req.body;
+  const { keyword, max_products = 30 } = req.body;
   if (!keyword?.trim()) return res.status(400).json({ error: '請提供關鍵字' });
 
   const db = getDB();
@@ -114,11 +168,7 @@ router.post('/', (req, res) => {
   if (existing) return res.status(409).json({ error: '此關鍵字已在追蹤清單中' });
 
   const id = uuidv4();
-  db.prepare(`
-    INSERT INTO shopee_keywords (id, keyword, max_products, schedule_type)
-    VALUES (?, ?, ?, ?)
-  `).run(id, keyword.trim(), Number(max_products), schedule_type);
-
+  db.prepare('INSERT INTO shopee_keywords (id, keyword, max_products) VALUES (?, ?, ?)').run(id, keyword.trim(), Number(max_products));
   res.json({ ok: true, id });
 });
 
@@ -138,14 +188,18 @@ router.patch('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── POST /api/shopee-keywords/:id/run ── 手動立即執行
+// ── POST /api/shopee-keywords/:id/run ── 手動立即執行（等待結果回傳）
 router.post('/:id/run', async (req, res) => {
   const db = getDB();
   const kw = db.prepare('SELECT * FROM shopee_keywords WHERE id = ?').get(req.params.id);
   if (!kw) return res.status(404).json({ error: '找不到此關鍵字' });
 
-  res.json({ ok: true, message: '已開始執行，請稍候' });
-  runKeyword(kw); // 非同步執行，不等結果
+  const result = await runKeyword(kw);
+  if (result.ok) {
+    res.json({ ok: true, count: result.count });
+  } else {
+    res.status(500).json({ error: result.error });
+  }
 });
 
 // ── GET /api/shopee-keywords/:id/results ── 取得最新一次搜尋結果

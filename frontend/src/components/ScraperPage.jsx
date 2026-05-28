@@ -109,33 +109,36 @@ export default function ScraperPage({ isOnline, toast }) {
   const [apifyError,      setApifyError]      = useState('')
 
   // ── 蝦皮關鍵字追蹤清單 ──
-  const [kwList,      setKwList]      = useState([])
-  const [kwAddLoading, setKwAddLoading] = useState(false)
-  const [kwResults,   setKwResults]   = useState(null)
-  const [kwResultsId, setKwResultsId] = useState(null)
+  const [kwList,           setKwList]           = useState([])
+  const [kwAddLoading,     setKwAddLoading]     = useState(false)
+  const [kwResults,        setKwResults]        = useState(null)
+  const [kwResultsId,      setKwResultsId]      = useState(null)
   const [kwResultsLoading, setKwResultsLoading] = useState(false)
+  const [kwRunning,        setKwRunning]        = useState({})   // { [id]: true }
+  const [kwSchedule,       setKwSchedule]       = useState({ enabled: true, time: '02:00' })
+  const [kwSchedSaving,    setKwSchedSaving]    = useState(false)
 
   const newPlatform = detectPlatform(newUrl)
 
   const loadAll = useCallback(async () => {
     if (!isOnline) return
     try {
-      const [urls, sched, hist, status, shopee, kwData] = await Promise.all([
+      const [urls, sched, hist, status, shopee, kwData, kwSched] = await Promise.all([
           api.getScraperUrls(),
           api.getSchedule(),
           api.getScraperHistory(10),
           api.getScraperStatus(),
           api.getShopeeAuthStatus(),
           api.getShopeeKeywords(),
+          api.getShopeeKeywordSchedule(),
         ])
-      if (shopee) setShopeeStatus(shopee)
-      if (urls)  setUrlList(urls)
-      if (sched) setSchedule({ enabled: sched.enabled, time: sched.time, days: sched.days })
-      if (hist)  setHistory(hist)
-      if (status && status.status === 'running') {
-        setBatchRunning(true)
-      }
-      if (kwData) setKwList(kwData)
+      if (shopee)  setShopeeStatus(shopee)
+      if (urls)    setUrlList(urls)
+      if (sched)   setSchedule({ enabled: sched.enabled, time: sched.time, days: sched.days })
+      if (hist)    setHistory(hist)
+      if (status && status.status === 'running') setBatchRunning(true)
+      if (kwData)  setKwList(kwData)
+      if (kwSched) setKwSchedule(kwSched)
     } catch (err) {
       toast(`載入資料失敗：${err.message}`, 'error')
     }
@@ -953,12 +956,57 @@ export default function ScraperPage({ isOnline, toast }) {
           五、蝦皮追蹤關鍵字清單
       ══════════════════════════════════════════════ */}
       <div className="card" style={{ padding: '20px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
           <div className="section-title" style={{ margin: 0 }}>蝦皮追蹤清單</div>
-          <span style={{
-            fontSize: 10, background: 'rgba(249,115,22,0.15)', color: '#fb923c',
-            borderRadius: 6, padding: '2px 8px', fontWeight: 500, letterSpacing: 0.5,
-          }}>每天凌晨 2:00 自動執行</span>
+
+          {/* 排程開關 */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={!!kwSchedule.enabled}
+              onChange={e => setKwSchedule(prev => ({ ...prev, enabled: e.target.checked }))}
+              style={{ accentColor: '#fb923c', width: 14, height: 14 }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>自動排程</span>
+          </label>
+
+          {/* 時間輸入 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>每天</span>
+            <input
+              type="time"
+              value={kwSchedule.time}
+              onChange={e => setKwSchedule(prev => ({ ...prev, time: e.target.value }))}
+              disabled={!kwSchedule.enabled}
+              style={{
+                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 6, padding: '3px 8px', color: 'var(--text-primary)',
+                fontSize: 13, fontFamily: 'DM Mono, monospace', outline: 'none',
+                opacity: kwSchedule.enabled ? 1 : 0.4,
+              }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>執行</span>
+          </div>
+
+          {/* 儲存按鈕 */}
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 12, padding: '3px 12px' }}
+            disabled={kwSchedSaving}
+            onClick={async () => {
+              setKwSchedSaving(true)
+              try {
+                await api.setShopeeKeywordSchedule(kwSchedule)
+                toast(`排程已更新：${kwSchedule.enabled ? `每天 ${kwSchedule.time}` : '已停用'}`, 'success')
+              } catch (err) {
+                toast(err.message, 'error')
+              } finally {
+                setKwSchedSaving(false)
+              }
+            }}
+          >
+            {kwSchedSaving ? '儲存中…' : '儲存排程'}
+          </button>
         </div>
 
         {kwList.length === 0 ? (
@@ -1024,14 +1072,23 @@ export default function ScraperPage({ isOnline, toast }) {
                 <button
                   className="btn btn-ghost"
                   style={{ fontSize: 11, padding: '3px 10px', flexShrink: 0 }}
+                  disabled={!!kwRunning[kw.id]}
                   onClick={async () => {
+                    setKwRunning(prev => ({ ...prev, [kw.id]: true }))
+                    toast(`正在抓取「${kw.keyword}」，請稍候…`, 'success')
                     try {
-                      await api.runShopeeKeyword(kw.id)
-                      toast(`已開始抓取「${kw.keyword}」，約 1 分鐘後完成`, 'success')
-                    } catch (err) { toast(err.message, 'error') }
+                      const res = await api.runShopeeKeyword(kw.id)
+                      toast(`「${kw.keyword}」完成，共 ${res.count} 筆`, 'success')
+                      const updated = await api.getShopeeKeywords()
+                      setKwList(updated)
+                    } catch (err) {
+                      toast(`「${kw.keyword}」執行失敗：${err.message}`, 'error')
+                    } finally {
+                      setKwRunning(prev => ({ ...prev, [kw.id]: false }))
+                    }
                   }}
                 >
-                  ↻ 執行
+                  {kwRunning[kw.id] ? '執行中…' : '↻ 執行'}
                 </button>
 
                 {/* 刪除 */}

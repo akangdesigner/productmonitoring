@@ -177,6 +177,28 @@ async function initDB() {
     );
   `);
 
+  // ── 蝦皮關鍵字追蹤 ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shopee_keywords (
+      id            TEXT PRIMARY KEY,
+      keyword       TEXT NOT NULL UNIQUE,
+      max_products  INTEGER DEFAULT 30,
+      enabled       INTEGER DEFAULT 1,
+      schedule_type TEXT DEFAULT 'daily',
+      last_run_at   TEXT,
+      item_count    INTEGER DEFAULT 0,
+      created_at    TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS shopee_results (
+      id          TEXT PRIMARY KEY,
+      keyword_id  TEXT NOT NULL REFERENCES shopee_keywords(id) ON DELETE CASCADE,
+      run_at      TEXT DEFAULT (datetime('now','localtime')),
+      item_count  INTEGER DEFAULT 0,
+      items       TEXT DEFAULT '[]'
+    );
+  `);
+
   // 清理上次伺服器非正常關閉留下的 running 任務
   db.prepare("UPDATE scrape_jobs SET status='failed', error_detail='伺服器重啟，任務中斷', finished_at=datetime('now','localtime') WHERE status='running'").run();
 

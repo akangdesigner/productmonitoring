@@ -60,4 +60,14 @@ export const api = {
   importShopeeAuth:    ()          => apiFetch('/api/shopee-auth/import', { method: 'POST' }),
   apifyShopeeSearch:   (keyword, maxProducts = 20, sort = 'relevancy') =>
     apiFetch('/api/apify/shopee', { method: 'POST', body: JSON.stringify({ keyword, maxProducts, sort }) }),
+
+  // 蝦皮關鍵字追蹤
+  getShopeeKeywords:    ()    => apiFetch('/api/shopee-keywords'),
+  addShopeeKeyword:     (keyword, max_products, schedule_type) =>
+    apiFetch('/api/shopee-keywords', { method: 'POST', body: JSON.stringify({ keyword, max_products, schedule_type }) }),
+  deleteShopeeKeyword:  (id)  => apiFetch(`/api/shopee-keywords/${id}`, { method: 'DELETE' }),
+  toggleShopeeKeyword:  (id, enabled) =>
+    apiFetch(`/api/shopee-keywords/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+  runShopeeKeyword:     (id)  => apiFetch(`/api/shopee-keywords/${id}/run`, { method: 'POST' }),
+  getShopeeKeywordResults: (id) => apiFetch(`/api/shopee-keywords/${id}/results`),
 };

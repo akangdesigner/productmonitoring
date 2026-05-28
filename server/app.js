@@ -24,7 +24,8 @@ app.use('/api/dashboard',    require('./routes/dashboard'));
 app.use('/api/my-products', require('./routes/clientProducts'));
 app.use('/api/search',      require('./routes/search'));
 app.use('/api/shopee-auth', require('./routes/shopeeAuth'));
-app.use('/api/apify',      require('./routes/apify'));
+app.use('/api/apify',           require('./routes/apify'));
+app.use('/api/shopee-keywords', require('./routes/shopeeKeywords'));
 
 // ── SPA Fallback（React Router 用）──
 app.get('*', (req, res) => {

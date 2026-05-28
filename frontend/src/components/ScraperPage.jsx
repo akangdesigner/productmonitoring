@@ -108,17 +108,25 @@ export default function ScraperPage({ isOnline, toast }) {
   const [apifyResults,    setApifyResults]    = useState(null)
   const [apifyError,      setApifyError]      = useState('')
 
+  // ── 蝦皮關鍵字追蹤清單 ──
+  const [kwList,      setKwList]      = useState([])
+  const [kwAddLoading, setKwAddLoading] = useState(false)
+  const [kwResults,   setKwResults]   = useState(null)
+  const [kwResultsId, setKwResultsId] = useState(null)
+  const [kwResultsLoading, setKwResultsLoading] = useState(false)
+
   const newPlatform = detectPlatform(newUrl)
 
   const loadAll = useCallback(async () => {
     if (!isOnline) return
     try {
-      const [urls, sched, hist, status, shopee] = await Promise.all([
+      const [urls, sched, hist, status, shopee, kwData] = await Promise.all([
           api.getScraperUrls(),
           api.getSchedule(),
           api.getScraperHistory(10),
           api.getScraperStatus(),
           api.getShopeeAuthStatus(),
+          api.getShopeeKeywords(),
         ])
       if (shopee) setShopeeStatus(shopee)
       if (urls)  setUrlList(urls)
@@ -127,6 +135,7 @@ export default function ScraperPage({ isOnline, toast }) {
       if (status && status.status === 'running') {
         setBatchRunning(true)
       }
+      if (kwData) setKwList(kwData)
     } catch (err) {
       toast(`載入資料失敗：${err.message}`, 'error')
     }
@@ -820,8 +829,30 @@ export default function ScraperPage({ isOnline, toast }) {
         {/* 搜尋結果 */}
         {apifyResults && !apifyLoading && (
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-              「{apifyResults.keyword}」共找到 <strong style={{ color: 'var(--text-primary)' }}>{apifyResults.count}</strong> 筆結果
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                「{apifyResults.keyword}」共找到 <strong style={{ color: 'var(--text-primary)' }}>{apifyResults.count}</strong> 筆結果
+              </div>
+              <button
+                className="btn btn-ghost"
+                disabled={kwAddLoading || kwList.some(k => k.keyword === apifyResults.keyword)}
+                onClick={async () => {
+                  setKwAddLoading(true)
+                  try {
+                    await api.addShopeeKeyword(apifyResults.keyword, apifyMax, 'daily')
+                    const updated = await api.getShopeeKeywords()
+                    setKwList(updated)
+                    toast(`已將「${apifyResults.keyword}」加入追蹤清單`, 'success')
+                  } catch (err) {
+                    toast(err.message, 'error')
+                  } finally {
+                    setKwAddLoading(false)
+                  }
+                }}
+                style={{ fontSize: 12, padding: '4px 12px' }}
+              >
+                {kwList.some(k => k.keyword === apifyResults.keyword) ? '✓ 已追蹤' : kwAddLoading ? '加入中…' : '+ 加入追蹤'}
+              </button>
             </div>
             {apifyResults.count === 0 ? (
               <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
@@ -919,7 +950,172 @@ export default function ScraperPage({ isOnline, toast }) {
       </div>
 
       {/* ══════════════════════════════════════════════
-          五、執行歷史
+          五、蝦皮追蹤關鍵字清單
+      ══════════════════════════════════════════════ */}
+      <div className="card" style={{ padding: '20px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div className="section-title" style={{ margin: 0 }}>蝦皮追蹤清單</div>
+          <span style={{
+            fontSize: 10, background: 'rgba(249,115,22,0.15)', color: '#fb923c',
+            borderRadius: 6, padding: '2px 8px', fontWeight: 500, letterSpacing: 0.5,
+          }}>每天凌晨 2:00 自動執行</span>
+        </div>
+
+        {kwList.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            尚無追蹤關鍵字 — 搜尋蝦皮後點「+ 加入追蹤」即可
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {kwList.map(kw => (
+              <div key={kw.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+                borderRadius: 10, padding: '10px 14px',
+              }}>
+                {/* 啟用開關 */}
+                <input
+                  type="checkbox"
+                  checked={!!kw.enabled}
+                  onChange={async (e) => {
+                    await api.toggleShopeeKeyword(kw.id, e.target.checked)
+                    setKwList(prev => prev.map(k => k.id === kw.id ? { ...k, enabled: e.target.checked ? 1 : 0 } : k))
+                  }}
+                  style={{ accentColor: '#fb923c', width: 15, height: 15, cursor: 'pointer', flexShrink: 0 }}
+                />
+
+                {/* 關鍵字名稱 */}
+                <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)', fontWeight: 500 }}>
+                  {kw.keyword}
+                </span>
+
+                {/* 上次執行資訊 */}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', lineHeight: 1.6, flexShrink: 0 }}>
+                  {kw.last_run_at ? (
+                    <>
+                      <div>上次：{kw.last_run_at}</div>
+                      <div>{kw.item_count} 筆商品</div>
+                    </>
+                  ) : (
+                    <div>尚未執行</div>
+                  )}
+                </div>
+
+                {/* 查看結果 */}
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: '3px 10px', flexShrink: 0 }}
+                  disabled={!kw.last_run_at || (kwResultsId === kw.id && kwResultsLoading)}
+                  onClick={async () => {
+                    if (kwResultsId === kw.id) { setKwResults(null); setKwResultsId(null); return }
+                    setKwResultsId(kw.id)
+                    setKwResultsLoading(true)
+                    try {
+                      const data = await api.getShopeeKeywordResults(kw.id)
+                      setKwResults(data)
+                    } catch { setKwResults(null) }
+                    finally { setKwResultsLoading(false) }
+                  }}
+                >
+                  {kwResultsId === kw.id ? '▲ 收起' : '▼ 看結果'}
+                </button>
+
+                {/* 立即執行 */}
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: '3px 10px', flexShrink: 0 }}
+                  onClick={async () => {
+                    try {
+                      await api.runShopeeKeyword(kw.id)
+                      toast(`已開始抓取「${kw.keyword}」，約 1 分鐘後完成`, 'success')
+                    } catch (err) { toast(err.message, 'error') }
+                  }}
+                >
+                  ↻ 執行
+                </button>
+
+                {/* 刪除 */}
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: '3px 8px', color: '#f87171', flexShrink: 0 }}
+                  onClick={async () => {
+                    if (!window.confirm(`確定移除「${kw.keyword}」的追蹤嗎？`)) return
+                    await api.deleteShopeeKeyword(kw.id)
+                    setKwList(prev => prev.filter(k => k.id !== kw.id))
+                    if (kwResultsId === kw.id) { setKwResults(null); setKwResultsId(null) }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 展開的結果 */}
+        {kwResults && kwResultsId && !kwResultsLoading && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              抓取時間：{kwResults.run_at}　共 {kwResults.item_count} 筆
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+              {(kwResults.items || []).slice(0, 30).map((item, i) => (
+                <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
+                  style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div style={{
+                    background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border)',
+                    borderRadius: 8, overflow: 'hidden',
+                    transition: 'border-color 0.2s',
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(249,115,22,0.5)'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                  >
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.name}
+                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }}
+                        onError={e => { e.target.style.display = 'none' }} />
+                    ) : (
+                      <div style={{
+                        width: '100%', aspectRatio: '1', background: 'rgba(255,255,255,0.04)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: 'var(--text-muted)',
+                      }}>🛍</div>
+                    )}
+                    <div style={{ padding: '8px 10px' }}>
+                      <div style={{
+                        fontSize: 11, lineHeight: 1.5, marginBottom: 6,
+                        overflow: 'hidden', display: '-webkit-box',
+                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        color: 'var(--text-primary)',
+                      }}>{item.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                        {item.price != null && (
+                          <span style={{ fontSize: 14, fontWeight: 700, color: '#fb923c' }}>
+                            NT$ {item.price.toLocaleString()}
+                          </span>
+                        )}
+                        {item.original_price != null && item.original_price !== item.price && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                            {item.original_price.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      {item.rating != null && (
+                        <div style={{ fontSize: 10, color: '#facc15', marginTop: 3 }}>
+                          ★ {Number(item.rating).toFixed(1)}
+                          {item.sold_count != null && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>售 {item.sold_count}</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══════════════════════════════════════════════
+          六、執行歷史
       ══════════════════════════════════════════════ */}
       <div className="card" style={{ padding: '20px 24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>

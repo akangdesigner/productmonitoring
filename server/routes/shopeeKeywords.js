@@ -69,10 +69,11 @@ async function fetchShopee(keyword, maxProducts = 30) {
   const raw = Array.isArray(response.data) ? response.data : [];
   return raw.map(item => ({
     shop_id:        item.shop_id,
+    shop_name:      item.shop_name || item.shopName || item.seller_name || item.seller || null,
     item_id:        item.item_id,
     name:           item.name,
-    price:          item.price != null ? Math.round(item.price / 100) : null,
-    original_price: item.original_price != null ? Math.round(item.original_price / 100) : null,
+    price:          item.price != null ? Math.round(item.price) : null,
+    original_price: item.original_price != null ? Math.round(item.original_price) : null,
     discount_pct:   item.discount_pct,
     rating:         item.rating,
     sold_count:     item.sold_count,

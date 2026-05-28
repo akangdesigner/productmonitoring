@@ -961,6 +961,11 @@ export default function ScraperPage({ isOnline, toast }) {
                             </span>
                           )}
                         </div>
+                        {item.shop_name && (
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                            🏪 {item.shop_name}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </a>
@@ -1200,6 +1205,11 @@ export default function ScraperPage({ isOnline, toast }) {
                         <div style={{ fontSize: 10, color: '#facc15', marginTop: 3 }}>
                           ★ {Number(item.rating).toFixed(1)}
                           {item.sold_count != null && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>售 {item.sold_count}</span>}
+                        </div>
+                      )}
+                      {item.shop_name && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                          🏪 {item.shop_name}
                         </div>
                       )}
                     </div>

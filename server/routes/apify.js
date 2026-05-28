@@ -45,20 +45,20 @@ router.post('/shopee', async (req, res) => {
 
     const items = Array.isArray(response.data) ? response.data : [];
 
-    // price 欄位是 Shopee 原始單位（÷100 = NT$）
     const results = items.map(item => ({
-      shop_id:   item.shop_id,
-      item_id:   item.item_id,
-      name:      item.name,
-      price:     item.price != null ? Math.round(item.price / 100) : null,
-      original_price: item.original_price != null ? Math.round(item.original_price / 100) : null,
-      discount_pct: item.discount_pct,
-      rating:    item.rating,
-      sold_count: item.sold_count,
-      is_mall:   item.is_mall,
-      location:  item.location,
-      image_url: item.image_url,
-      url:       item.url,
+      shop_id:        item.shop_id,
+      shop_name:      item.shop_name || item.shopName || item.seller_name || item.seller || null,
+      item_id:        item.item_id,
+      name:           item.name,
+      price:          item.price != null ? Math.round(item.price) : null,
+      original_price: item.original_price != null ? Math.round(item.original_price) : null,
+      discount_pct:   item.discount_pct,
+      rating:         item.rating,
+      sold_count:     item.sold_count,
+      is_mall:        item.is_mall,
+      location:       item.location,
+      image_url:      item.image_url,
+      url:            item.url,
     }));
 
     res.json({ ok: true, keyword: keyword.trim(), count: results.length, items: results });

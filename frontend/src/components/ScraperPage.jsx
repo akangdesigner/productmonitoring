@@ -119,6 +119,7 @@ export default function ScraperPage({ isOnline, toast }) {
   const [kwSchedSaving,    setKwSchedSaving]    = useState(false)
   const [kwNewInput,       setKwNewInput]       = useState('')
   const [kwSort,           setKwSort]           = useState('created_desc')
+  const [kwResultsSort,    setKwResultsSort]    = useState('default')
 
   const newPlatform = detectPlatform(newUrl)
 
@@ -1124,26 +1125,25 @@ export default function ScraperPage({ isOnline, toast }) {
                 {/* 抓取筆數設定 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>筆數</span>
-                  <input
-                    type="number"
-                    min={1} max={100}
-                    defaultValue={kw.max_products || 30}
-                    onBlur={async e => {
-                      const val = Math.max(1, Math.min(100, Number(e.target.value) || 30))
-                      e.target.value = val
-                      if (val === kw.max_products) return
+                  <select
+                    value={kw.max_products || 30}
+                    onChange={async e => {
+                      const val = Number(e.target.value)
                       try {
                         await api.updateShopeeKeyword(kw.id, { max_products: val })
                         setKwList(prev => prev.map(k => k.id === kw.id ? { ...k, max_products: val } : k))
                       } catch (err) { toast(err.message, 'error') }
                     }}
                     style={{
-                      width: 48, background: 'rgba(255,255,255,0.06)',
-                      border: '1px solid rgba(255,255,255,0.12)',
+                      background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
                       borderRadius: 6, padding: '3px 6px', color: 'var(--text-primary)',
-                      fontSize: 12, fontFamily: 'DM Mono, monospace', outline: 'none', textAlign: 'center',
+                      fontSize: 12, fontFamily: 'DM Mono, monospace', outline: 'none', cursor: 'pointer',
                     }}
-                  />
+                  >
+                    {[10, 20, 30, 40, 50].map(n => (
+                      <option key={n} value={n} style={{ background: '#1a1630' }}>{n} 筆</option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* 查看結果 */}
@@ -1209,11 +1209,39 @@ export default function ScraperPage({ isOnline, toast }) {
         {/* 展開的結果 */}
         {kwResults && kwResultsId && !kwResultsLoading && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-              抓取時間：{kwResults.run_at}　共 {kwResults.item_count} 筆
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                抓取時間：{kwResults.run_at}　共 {kwResults.item_count} 筆
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>排序</span>
+                <select
+                  value={kwResultsSort}
+                  onChange={e => setKwResultsSort(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 6, padding: '3px 8px', color: 'var(--text-primary)',
+                    fontSize: 12, fontFamily: 'Noto Sans TC, sans-serif', outline: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <option value="default"    style={{ background: '#1a1630' }}>預設</option>
+                  <option value="price_asc"  style={{ background: '#1a1630' }}>價格低→高</option>
+                  <option value="price_desc" style={{ background: '#1a1630' }}>價格高→低</option>
+                  <option value="rating"     style={{ background: '#1a1630' }}>評分高→低</option>
+                  <option value="sold"       style={{ background: '#1a1630' }}>銷售量高→低</option>
+                  <option value="mall_first" style={{ background: '#1a1630' }}>Mall 優先</option>
+                </select>
+              </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-              {(kwResults.items || []).slice(0, 30).map((item, i) => (
+              {[...(kwResults.items || [])].sort((a, b) => {
+                if (kwResultsSort === 'price_asc')  return (a.price ?? Infinity) - (b.price ?? Infinity)
+                if (kwResultsSort === 'price_desc') return (b.price ?? -1) - (a.price ?? -1)
+                if (kwResultsSort === 'rating')     return (b.rating ?? 0) - (a.rating ?? 0)
+                if (kwResultsSort === 'sold')       return (b.sold_count ?? 0) - (a.sold_count ?? 0)
+                if (kwResultsSort === 'mall_first') return (b.is_mall ? 1 : 0) - (a.is_mall ? 1 : 0)
+                return 0
+              }).map((item, i) => (
                 <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
                   style={{ textDecoration: 'none', color: 'inherit' }}>
                   <div style={{

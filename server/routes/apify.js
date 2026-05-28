@@ -30,6 +30,7 @@ router.post('/shopee', async (req, res) => {
       {
         country,
         keyword: keyword.trim(),
+        maxItems: Number(maxProducts),
         maxProducts: Number(maxProducts),
         mode: 'keyword',
         sort,
@@ -44,6 +45,12 @@ router.post('/shopee', async (req, res) => {
     );
 
     const items = Array.isArray(response.data) ? response.data : [];
+
+    // debug：印出第一筆原始資料，確認 price / rating 格式
+    if (items.length > 0) {
+      const { name, price, original_price, rating, rating_star, sold_count, shop_name, shopName, seller_name } = items[0];
+      console.log('[Apify debug]', JSON.stringify({ name, price, original_price, rating, rating_star, sold_count, shop_name, shopName, seller_name }));
+    }
 
     const results = items.map(item => ({
       shop_id:        item.shop_id,

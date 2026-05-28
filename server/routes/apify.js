@@ -37,7 +37,7 @@ router.post('/shopee', async (req, res) => {
         delay: 1,
       },
       {
-        params: { token, clean: true, format: 'json' },
+        params: { token, clean: true, format: 'json', limit: Number(maxProducts) },
         timeout: 300_000, // 5 分鐘
         headers: { 'Content-Type': 'application/json' },
       }

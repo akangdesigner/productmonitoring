@@ -60,7 +60,7 @@ async function fetchShopee(keyword, maxProducts = 30) {
       delay: 1,
     },
     {
-      params: { token, clean: true, format: 'json' },
+      params: { token, clean: true, format: 'json', limit: Number(maxProducts) },
       timeout: 300_000,
       headers: { 'Content-Type': 'application/json' },
     }

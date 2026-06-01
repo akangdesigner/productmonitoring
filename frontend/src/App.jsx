@@ -15,11 +15,29 @@ import AddProductModal from './components/AddProductModal'
 import RegisterPage    from './components/RegisterPage'
 import GuidePage       from './components/GuidePage'
 import SearchPage      from './components/SearchPage'
+import LoginPage       from './components/LoginPage'
 
 const DEFAULT_LOG = []
 
+function getStoredUser() {
+  const token = localStorage.getItem('auth_token')
+  if (!token) return null
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    if (payload.exp * 1000 < Date.now()) {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('auth_user')
+      return null
+    }
+    return JSON.parse(localStorage.getItem('auth_user') || 'null')
+  } catch {
+    return null
+  }
+}
+
 export default function App() {
   const { toasts, toast } = useToast()
+  const [user, setUser] = useState(getStoredUser)
 
   const [isOnline,    setIsOnline]    = useState(false)
   const [activeNav,   setActiveNav]   = useState('dashboard')
@@ -123,6 +141,13 @@ export default function App() {
     }
   }
 
+  function handleLogout() {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_user')
+    if (window.google) window.google.accounts.id.disableAutoSelect()
+    setUser(null)
+  }
+
   async function handleMarkAllRead() {
     if (isOnline) {
       try { await api.markAllRead() } catch {}
@@ -143,8 +168,34 @@ export default function App() {
     }
   }
 
+  if (!user) {
+    return <LoginPage onLogin={setUser} />
+  }
+
   return (
     <>
+      {user && (
+        <div style={{
+          position: 'fixed', top: 28, right: 48, zIndex: 200,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          {user.picture && (
+            <img src={user.picture} alt="" style={{
+              width: 30, height: 30, borderRadius: '50%',
+              border: '1.5px solid rgba(255,255,255,0.15)',
+            }} />
+          )}
+          <button onClick={handleLogout} style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 8, color: 'var(--text-muted)',
+            fontSize: 12, padding: '5px 12px', cursor: 'pointer',
+            fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em',
+          }}>
+            登出
+          </button>
+        </div>
+      )}
       {!isOnline && (
         <div className="offline-banner">
           ⚠ 無法連線後端伺服器 — 目前顯示示範資料，請執行 npm run dev 啟動後端

@@ -2,25 +2,25 @@ const { Client } = require('@line/bot-sdk');
 const { getDB } = require('../db');
 const logger = require('../utils/logger');
 
-function getLineConfig() {
-  // 優先用環境變數，DB 作為備援
-  const token  = process.env.LINE_CHANNEL_ACCESS_TOKEN
-    || getDB().prepare('SELECT channel_access_token FROM line_settings WHERE id = 1').get()?.channel_access_token || '';
-  const secret = process.env.LINE_CHANNEL_SECRET
-    || getDB().prepare('SELECT channel_secret FROM line_settings WHERE id = 1').get()?.channel_secret || '';
-  const userId = process.env.LINE_USER_ID
-    || getDB().prepare('SELECT user_id FROM line_settings WHERE id = 1').get()?.user_id || '';
+function getLineConfig(googleSub = null) {
+  const db  = getDB();
+  const row = googleSub
+    ? db.prepare('SELECT channel_access_token, channel_secret, user_id FROM line_settings WHERE google_sub = ?').get(googleSub)
+    : null;
+  const token  = process.env.LINE_CHANNEL_ACCESS_TOKEN || row?.channel_access_token || '';
+  const secret = process.env.LINE_CHANNEL_SECRET       || row?.channel_secret       || '';
+  const userId = process.env.LINE_USER_ID               || row?.user_id              || '';
   return { token, secret, userId };
 }
 
-function getClient() {
-  const { token, secret } = getLineConfig();
+function getClient(googleSub = null) {
+  const { token, secret } = getLineConfig(googleSub);
   if (!token) return null;
   return new Client({ channelAccessToken: token, channelSecret: secret });
 }
 
-function getTargetUserId() {
-  return getLineConfig().userId || null;
+function getTargetUserId(googleSub = null) {
+  return getLineConfig(googleSub).userId || null;
 }
 
 // ── Flex Message 模板 ─────────────────────────────────
@@ -195,9 +195,9 @@ function buildDailyReportFlex(products) {
 // ── 公開方法 ──────────────────────────────────────────
 
 const LineService = {
-  async sendAlert(message, flexPayload = null) {
-    const client = getClient();
-    const userId = getTargetUserId();
+  async sendAlert(message, flexPayload = null, googleSub = null) {
+    const client = getClient(googleSub);
+    const userId = getTargetUserId(googleSub);
     if (!client || !userId) {
       logger.warn('[LINE] 未設定 Token 或 User ID，略過推播');
       return;
@@ -209,12 +209,12 @@ const LineService = {
 
   async sendPriceDropAlert(params) {
     const flex = buildPriceDropFlex(params);
-    await this.sendAlert(flex.altText, flex);
+    await this.sendAlert(flex.altText, flex, params.googleSub || null);
   },
 
   async sendGiftAlert(params) {
     const flex = buildGiftFlex(params);
-    await this.sendAlert(flex.altText, flex);
+    await this.sendAlert(flex.altText, flex, params.googleSub || null);
   },
 
   async sendGapReport(gaps) {
@@ -294,9 +294,8 @@ const LineService = {
     const userId = getTargetUserId();
     if (!client || !userId) return;
 
-    const db = getDB();
-    const s = db.prepare('SELECT daily_report_enabled FROM line_settings WHERE id = 1').get();
-    if (!s?.daily_report_enabled) return;
+    // sendDailyReport 暫不支援多使用者，略過
+    return;
 
     // 查詢每個商品各平台最新價格
     const enriched = products.map(p => {
@@ -322,7 +321,7 @@ const LineService = {
   },
 
   async testConnection(token, userId) {
-    const { secret } = getLineConfig();
+    const { secret } = getLineConfig(null);
     const client = new Client({ channelAccessToken: token, channelSecret: secret });
     const flex = {
       type: 'flex',

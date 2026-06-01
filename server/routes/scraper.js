@@ -9,12 +9,13 @@ const { runScrapeJob } = require('../jobs/scheduledScrape');
 const AlertService = require('../services/AlertService');
 const logger = require('../utils/logger');
 
-// ── 排程設定存檔路徑 ──
-const SCHEDULE_FILE = path.join(__dirname, '../db/scraper-schedule.json');
+// ── 排程設定存檔路徑（per-user）──
+const DB_DIR = path.join(__dirname, '../db');
+function schedFile(userId) { return path.join(DB_DIR, `scraper-schedule-${userId}.json`); }
 
-function loadSchedule() {
+function loadSchedule(userId) {
   try {
-    const raw = JSON.parse(fs.readFileSync(SCHEDULE_FILE, 'utf8'));
+    const raw = JSON.parse(fs.readFileSync(schedFile(userId), 'utf8'));
     if (!Array.isArray(raw.urls)) raw.urls = [];
     return raw;
   } catch {
@@ -22,8 +23,8 @@ function loadSchedule() {
   }
 }
 
-function saveSchedule(s) {
-  fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(s, null, 2));
+function saveSchedule(s, userId) {
+  fs.writeFileSync(schedFile(userId), JSON.stringify(s, null, 2));
 }
 
 // ── DB 遷移：scrape_jobs 加入 target_url 欄位 ──
@@ -37,19 +38,19 @@ function daysToCron(days) {
   return map[days] || '*';
 }
 
-// ── 當前排程任務 ──
-let currentCronJob = null;
+// ── 當前排程任務（Map<userId, cronTask>）──
+const currentCronJobs = new Map();
 
 // ── 批次爬蟲進度 ──
 let scrapeProgress = { running: false, phase: '', current: 0, total: 0, message: '' };
 
-function applySchedule(s) {
-  if (currentCronJob) { currentCronJob.stop(); currentCronJob = null; }
+function applySchedule(s, userId) {
+  if (currentCronJobs.has(userId)) { currentCronJobs.get(userId).stop(); currentCronJobs.delete(userId); }
   if (!s.enabled || !s.urls?.length) return;
   const [hh, mm] = s.time.split(':');
   const expr = `${mm} ${hh} * * ${daysToCron(s.days)}`;
-  currentCronJob = cron.schedule(expr, async () => {
-    const current = loadSchedule();
+  const task = cron.schedule(expr, async () => {
+    const current = loadSchedule(userId);
     const enabledUrls = current.urls.filter(u => u.enabled);
     logger.info(`[排程] Phase 1：爬取 ${enabledUrls.length} 個 URL`);
 
@@ -80,7 +81,7 @@ function applySchedule(s) {
     logger.info(`[排程] Phase 3：比對寫入資料庫`);
     for (const { platform, products, jobId } of jobs) {
       try {
-        const result = await matchAndUpdate(products, platform, sharedAiMap);
+        const result = await matchAndUpdate(products, platform, sharedAiMap, userId);
         getDB().prepare(`UPDATE scrape_jobs SET status='success', products_scraped=?, finished_at=datetime('now','localtime') WHERE id=?`)
           .run(result.total, jobId);
         logger.info(`[排程] ${platform} 完成：新增 ${result.added}，更新 ${result.updated}，共 ${result.total} 筆`);
@@ -91,10 +92,20 @@ function applySchedule(s) {
       }
     }
   }, { timezone: 'Asia/Taipei' });
+  currentCronJobs.set(userId, task);
 }
 
-// 啟動時套用已儲存的排程
-applySchedule(loadSchedule());
+// 啟動時載入所有使用者的排程
+function loadAllSchedules() {
+  try {
+    const files = fs.readdirSync(DB_DIR).filter(f => /^scraper-schedule-.+\.json$/.test(f));
+    for (const f of files) {
+      const userId = f.replace('scraper-schedule-', '').replace('.json', '');
+      applySchedule(loadSchedule(userId), userId);
+    }
+  } catch {}
+}
+loadAllSchedules();
 
 // ── 平台偵測 ──
 function detectPlatform(url) {
@@ -599,16 +610,18 @@ ${candsDesc}
 }
 
 // ── 比對 & 更新資料庫，回傳價格異動清單 ──
-// sharedAiMap：批次模式下由外部預先建立並傳入，避免各平台重複呼叫 AI
-async function matchAndUpdate(scrapedProducts, platform, sharedAiMap = null) {
+async function matchAndUpdate(scrapedProducts, platform, sharedAiMap = null, userId = '') {
   const db = getDB();
-  const existing = db.prepare('SELECT id, name, base_name, variant, brand FROM products').all();
+  const existing = db.prepare('SELECT id, name, base_name, variant, brand FROM products WHERE user_id = ?').all(userId);
 
   const validProducts = scrapedProducts.filter(p => p.price);
   const aiMap = sharedAiMap ?? await parseNamesWithAI(validProducts.map(p => p.name));
 
-  // Layer 0：建立 URL → product_id 對照表，同平台重爬快速通道
-  const urlRows = db.prepare('SELECT url, product_id FROM product_urls').all();
+  // Layer 0：建立 URL → product_id 對照表（只含此 user 的商品）
+  const existingIds = existing.map(e => e.id);
+  const urlRows = existingIds.length > 0
+    ? db.prepare(`SELECT url, product_id FROM product_urls WHERE product_id IN (${existingIds.map(() => '?').join(',')})`).all(...existingIds)
+    : [];
   const urlMap  = new Map(urlRows.map(r => [r.url, r.product_id]));
 
   // ── 預先計算每個商品的比對決策（所有 async 都在 transaction 前完成）──
@@ -700,8 +713,8 @@ async function matchAndUpdate(scrapedProducts, platform, sharedAiMap = null) {
         // type === 'new'
         const { parsed, itemBase, itemVariant } = plan;
         const productId = uuidv4();
-        db.prepare(`INSERT INTO products (id, name, base_name, variant, brand, category, emoji, image_url, is_active) VALUES (?,?,?,?,?,'唇膏','💄',?,1)`)
-          .run(productId, item.name, itemBase, itemVariant, parsed?.brand || '', item.imageUrl || null);
+        db.prepare(`INSERT INTO products (id, user_id, name, base_name, variant, brand, category, emoji, image_url, is_active) VALUES (?,?,?,?,?,?,'唇膏','💄',?,1)`)
+          .run(productId, userId, item.name, itemBase, itemVariant, parsed?.brand || '', item.imageUrl || null);
         insertPrice.run(uuidv4(), productId, platform, item.price, item.origPrice ?? null, null);
         if (item.productUrl) {
           db.prepare('INSERT INTO product_urls (id, product_id, platform, url) VALUES (?,?,?,?)').run(uuidv4(), productId, platform, item.productUrl);
@@ -744,12 +757,14 @@ async function matchAndUpdate(scrapedProducts, platform, sharedAiMap = null) {
 // ── 跨平台整批比對寫入（取代 Phase 3 逐平台 matchAndUpdate）──
 // allJobs: [{ jobId, platform, label, products }]
 // sharedAiMap: parseNamesWithAI 已解析好的結果 Map
-async function bulkMatchAndWrite(allJobs, sharedAiMap) {
+async function bulkMatchAndWrite(allJobs, sharedAiMap, userId = '') {
   const db = getDB();
 
-  // 一次讀取所有現有商品與 URL（不在 loop 內重複讀）
-  const existing = db.prepare('SELECT id, name, base_name, variant, brand FROM products WHERE is_active=1').all();
-  const urlRows  = db.prepare('SELECT url, product_id FROM product_urls').all();
+  const existing = db.prepare('SELECT id, name, base_name, variant, brand FROM products WHERE is_active=1 AND user_id=?').all(userId);
+  const existingIds = existing.map(e => e.id);
+  const urlRows = existingIds.length > 0
+    ? db.prepare(`SELECT url, product_id FROM product_urls WHERE product_id IN (${existingIds.map(() => '?').join(',')})`).all(...existingIds)
+    : [];
   const urlMap   = new Map(urlRows.map(r => [r.url, r.product_id]));
 
   // 整理所有平台有效商品
@@ -847,8 +862,8 @@ async function bulkMatchAndWrite(allJobs, sharedAiMap) {
       const brand     = first.parsed?.brand || '';
       const imageUrl  = entries.map(e => e.item.imageUrl).find(Boolean) || null;
 
-      db.prepare(`INSERT INTO products (id, name, base_name, variant, brand, category, emoji, image_url, is_active) VALUES (?,?,?,?,?,'唇膏','💄',?,1)`)
-        .run(productId, first.item.name, baseName, first.itemVar, brand, imageUrl);
+      db.prepare(`INSERT INTO products (id, user_id, name, base_name, variant, brand, category, emoji, image_url, is_active) VALUES (?,?,?,?,?,?,'唇膏','💄',?,1)`)
+        .run(productId, userId, first.item.name, baseName, first.itemVar, brand, imageUrl);
 
       const seenPf = new Set();
       for (const { item, platform } of entries) {
@@ -996,38 +1011,36 @@ router.post('/reparse', async (req, res) => {
 //  URL 管理 API
 // ═══════════════════════════════════════════════════════
 
-// GET /api/scraper/urls — 取得所有監控網址
+// GET /api/scraper/urls
 router.get('/urls', (req, res) => {
-  res.json(loadSchedule().urls || []);
+  res.json(loadSchedule(req.user.sub).urls || []);
 });
 
-// POST /api/scraper/urls — 新增監控網址
+// POST /api/scraper/urls
 router.post('/urls', (req, res) => {
+  const uid = req.user.sub;
   const { url, label, maxPages } = req.body;
   if (!url) return res.status(400).json({ error: 'URL 必填' });
   const platform = detectPlatform(url);
   if (!platform) return res.status(400).json({ error: '不支援的平台（目前支援屈臣氏、康是美、寶雅）' });
-
   const parsedMax = Number(maxPages);
-  const s = loadSchedule();
+  const s = loadSchedule(uid);
   const newEntry = {
-    id:       uuidv4(),
-    url,
-    platform,
-    label:    label || `${PLATFORM_LABEL[platform]} ${new Date().toLocaleDateString('zh-TW')}`,
-    enabled:  true,
-    addedAt:  new Date().toISOString(),
+    id: uuidv4(), url, platform,
+    label: label || `${PLATFORM_LABEL[platform]} ${new Date().toLocaleDateString('zh-TW')}`,
+    enabled: true, addedAt: new Date().toISOString(),
     maxPages: (Number.isFinite(parsedMax) && parsedMax >= 0) ? parsedMax : 1,
   };
   s.urls.push(newEntry);
-  saveSchedule(s);
-  applySchedule(s);
+  saveSchedule(s, uid);
+  applySchedule(s, uid);
   res.status(201).json(newEntry);
 });
 
-// PATCH /api/scraper/urls/:id — 切換啟用/停用、更新名稱或網址
+// PATCH /api/scraper/urls/:id
 router.patch('/urls/:id', (req, res) => {
-  const s = loadSchedule();
+  const uid = req.user.sub;
+  const s = loadSchedule(uid);
   const entry = s.urls.find(u => u.id === req.params.id);
   if (!entry) return res.status(404).json({ error: '找不到此 URL' });
   entry.enabled = req.body.enabled !== undefined ? !!req.body.enabled : !entry.enabled;
@@ -1042,49 +1055,48 @@ router.patch('/urls/:id', (req, res) => {
     const p = Number(req.body.maxPages);
     if (Number.isFinite(p) && p >= 0) entry.maxPages = p;
   }
-  saveSchedule(s);
-  applySchedule(s);
+  saveSchedule(s, uid);
+  applySchedule(s, uid);
   res.json(entry);
 });
 
-// DELETE /api/scraper/urls — 清除全部監控網址
+// DELETE /api/scraper/urls
 router.delete('/urls', (req, res) => {
-  const s = loadSchedule();
+  const uid = req.user.sub;
+  const s = loadSchedule(uid);
   s.urls = [];
-  saveSchedule(s);
-  applySchedule(s);
+  saveSchedule(s, uid);
+  applySchedule(s, uid);
   res.json({ ok: true });
 });
 
-// DELETE /api/scraper/urls/:id — 刪除監控網址
+// DELETE /api/scraper/urls/:id
 router.delete('/urls/:id', (req, res) => {
-  const s = loadSchedule();
+  const uid = req.user.sub;
+  const s = loadSchedule(uid);
   const before = s.urls.length;
   s.urls = s.urls.filter(u => u.id !== req.params.id);
   if (s.urls.length === before) return res.status(404).json({ error: '找不到此 URL' });
-  saveSchedule(s);
-  applySchedule(s);
+  saveSchedule(s, uid);
+  applySchedule(s, uid);
   res.json({ ok: true });
 });
 
-// ═══════════════════════════════════════════════════════
-//  排程設定 API
-// ═══════════════════════════════════════════════════════
-
 // GET /api/scraper/schedule
 router.get('/schedule', (req, res) => {
-  const s = loadSchedule();
+  const s = loadSchedule(req.user.sub);
   res.json({ enabled: s.enabled, time: s.time, days: s.days, urls: s.urls });
 });
 
 // PUT /api/scraper/schedule
 router.put('/schedule', (req, res) => {
-  const s = loadSchedule();
+  const uid = req.user.sub;
+  const s = loadSchedule(uid);
   s.enabled = !!req.body.enabled;
   s.time    = req.body.time  || s.time  || '03:00';
   s.days    = req.body.days  || s.days  || 'daily';
-  saveSchedule(s);
-  applySchedule(s);
+  saveSchedule(s, uid);
+  applySchedule(s, uid);
   res.json({ ok: true, enabled: s.enabled, time: s.time, days: s.days });
 });
 
@@ -1094,6 +1106,7 @@ router.put('/schedule', (req, res) => {
 
 // POST /api/scraper/url — 指定 URL 立即執行
 router.post('/url', async (req, res) => {
+  const uid = req.user.sub;
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'URL 必填' });
   const platform = detectPlatform(url);
@@ -1105,7 +1118,7 @@ router.post('/url', async (req, res) => {
 
   try {
     const scraped = await scrapeCategoryPage(url, platform);
-    const result  = await matchAndUpdate(scraped, platform);
+    const result  = await matchAndUpdate(scraped, platform, null, uid);
     db.prepare(`UPDATE scrape_jobs SET status='success', products_scraped=?, finished_at=datetime('now','localtime') WHERE id=?`)
       .run(result.total, jobId);
     res.json(result);
@@ -1132,9 +1145,8 @@ router.post('/run/:platform', async (req, res) => {
 });
 
 // ── 批次執行所有已啟用的監控網址（背景任務）──
-// 三段式：Phase 1 全部爬完 → Phase 2 合併 AI 解析 → Phase 3 逐平台寫入
-async function runBatchScrapeJob() {
-  const current = loadSchedule();
+async function runBatchScrapeJob(userId = '') {
+  const current = loadSchedule(userId);
   const enabledUrls = current.urls.filter(u => u.enabled);
   if (!enabledUrls.length) return { total: 0, results: [] };
 
@@ -1170,13 +1182,13 @@ async function runBatchScrapeJob() {
   });
   logger.info(`[批次] AI 解析完成，${sharedAiMap.size} 筆成功`);
 
-  // Phase 3：整批跨平台比對寫入（讀一次 DB，全部平台一起處理）
+  // Phase 3：整批跨平台比對寫入
   logger.info(`[批次] Phase 3：整批比對寫入資料庫`);
   scrapeProgress = { running: true, phase: 'saving', current: 0, total: 1, message: '寫入資料庫...' };
   let bulkResult = { added: 0, updated: 0, total: 0 };
   let phase3Failed = false;
   try {
-    bulkResult = await bulkMatchAndWrite(jobs, sharedAiMap);
+    bulkResult = await bulkMatchAndWrite(jobs, sharedAiMap, userId);
     for (const { jobId, products } of jobs) {
       getDB().prepare(`UPDATE scrape_jobs SET status='success', products_scraped=?, finished_at=datetime('now','localtime') WHERE id=?`)
         .run(products.filter(p => p.price).length, jobId);
@@ -1208,12 +1220,12 @@ async function runBatchScrapeJob() {
 
 // POST /api/scraper/run-enabled — 啟動批次背景抓取
 router.post('/run-enabled', (req, res) => {
-  const current = loadSchedule();
+  const uid = req.user.sub;
+  const current = loadSchedule(uid);
   const enabledUrls = current.urls.filter(u => u.enabled);
   if (!enabledUrls.length) return res.status(400).json({ error: '尚無已啟用的監控網址' });
 
-  // 立即回傳，背景執行
-  runBatchScrapeJob()
+  runBatchScrapeJob(uid)
     .then(data => logger.info(`[批次抓取] 完成：成功 ${data.success} / 失敗 ${data.failed}`))
     .catch(err => logger.error(`[批次抓取] 發生非預期錯誤: ${err.message}`));
 

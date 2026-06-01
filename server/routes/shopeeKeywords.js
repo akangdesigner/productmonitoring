@@ -9,102 +9,81 @@ const { getDB } = require('../db');
 
 const ACTOR_ID    = '4nhvc7lTKzkDrk7bD';
 const BASE_URL    = 'https://api.apify.com/v2';
-const SCHED_FILE  = path.join(__dirname, '../db/shopee-keyword-schedule.json');
+const DB_DIR      = path.join(__dirname, '../db');
 
-// ── 排程設定讀寫 ──
-function loadSchedule() {
-  try {
-    return JSON.parse(fs.readFileSync(SCHED_FILE, 'utf8'));
-  } catch {
-    return { enabled: true, time: '02:00' };
-  }
+// ── 排程設定讀寫（per-user）──
+function schedFile(userId) { return path.join(DB_DIR, `shopee-keyword-schedule-${userId}.json`); }
+function loadSchedule(userId) {
+  try { return JSON.parse(fs.readFileSync(schedFile(userId), 'utf8')); }
+  catch { return { enabled: true, time: '02:00' }; }
+}
+function saveSchedule(s, userId) {
+  fs.writeFileSync(schedFile(userId), JSON.stringify(s, null, 2), 'utf8');
 }
 
-function saveSchedule(s) {
-  fs.writeFileSync(SCHED_FILE, JSON.stringify(s, null, 2), 'utf8');
-}
-
-// ── 動態 cron 管理 ──
-let cronTask = null;
+// ── 動態 cron 管理（Map<userId, cronTask>）──
+const cronTasks = new Map();
 
 function buildCronExpr(time) {
   const [hh, mm] = time.split(':').map(Number);
   return `${mm} ${hh} * * *`;
 }
 
-function applySchedule(s) {
-  if (cronTask) { cronTask.stop(); cronTask = null; }
+function applySchedule(s, userId) {
+  if (cronTasks.has(userId)) { cronTasks.get(userId).stop(); cronTasks.delete(userId); }
   if (!s.enabled) return;
-  const expr = buildCronExpr(s.time);
-  cronTask = cron.schedule(expr, runAll, { timezone: 'Asia/Taipei' });
-  console.log(`[蝦皮排程] 已套用：每天 ${s.time}（${expr}）`);
+  const task = cron.schedule(buildCronExpr(s.time), () => runAll(userId), { timezone: 'Asia/Taipei' });
+  cronTasks.set(userId, task);
+  console.log(`[蝦皮排程:${userId.slice(0,8)}] 已套用：每天 ${s.time}`);
 }
 
-// 啟動時載入排程
-applySchedule(loadSchedule());
+// 啟動時載入所有使用者的排程
+function loadAllSchedules() {
+  try {
+    const files = fs.readdirSync(DB_DIR).filter(f => /^shopee-keyword-schedule-.+\.json$/.test(f));
+    for (const f of files) {
+      const userId = f.replace('shopee-keyword-schedule-', '').replace('.json', '');
+      applySchedule(loadSchedule(userId), userId);
+    }
+  } catch {}
+}
+loadAllSchedules();
 
-// ── 查蝦皮商家資訊（by shop_id）──
-const SHOPEE_SHOP_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Referer': 'https://shopee.tw/',
-  'Accept': 'application/json',
-};
-
+// ── 查蝦皮商家資訊 ──
 async function fetchShopInfo(shopId) {
   try {
     const res = await axios.get(
       `https://shopee.tw/api/v4/shop/get_shop_detail?shopid=${shopId}&limit=1`,
-      { headers: SHOPEE_SHOP_HEADERS, timeout: 8000 }
+      { headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Referer': 'https://shopee.tw/',
+        'Accept': 'application/json',
+      }, timeout: 8000 }
     );
     const d = res.data?.data;
     if (!d) return null;
     return { name: d.name || null, is_official: !!d.is_official_shop };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 // ── 呼叫 Apify 搜尋蝦皮 ──
 async function fetchShopee(keyword, maxProducts = 30) {
   const token = process.env.APIFY_TOKEN;
   if (!token) throw new Error('後端尚未設定 APIFY_TOKEN');
-
   const response = await axios.post(
     `${BASE_URL}/acts/${ACTOR_ID}/run-sync-get-dataset-items`,
-    {
-      country: 'tw',
-      keyword: keyword.trim(),
-      maxProducts: Number(maxProducts),
-      mode: 'keyword',
-      sort: 'relevancy',
-      fetchDetail: false,
-      delay: 1,
-    },
-    {
-      params: { token, clean: true, format: 'json', limit: Number(maxProducts) },
-      timeout: 300_000,
-      headers: { 'Content-Type': 'application/json' },
-    }
+    { country: 'tw', keyword: keyword.trim(), maxProducts: Number(maxProducts), mode: 'keyword', sort: 'relevancy', fetchDetail: false, delay: 1 },
+    { params: { token, clean: true, format: 'json', limit: Number(maxProducts) }, timeout: 300_000, headers: { 'Content-Type': 'application/json' } }
   );
-
   const raw = Array.isArray(response.data) ? response.data : [];
   const items = raw.map(item => ({
-    shop_id:        item.shop_id,
-    shop_name:      item.shop_name || item.shopName || item.seller_name || item.seller || null,
-    item_id:        item.item_id,
-    name:           item.name,
-    price:          item.price != null ? Math.round(item.price) : null,
+    shop_id: item.shop_id, shop_name: item.shop_name || item.shopName || item.seller_name || item.seller || null,
+    item_id: item.item_id, name: item.name,
+    price: item.price != null ? Math.round(item.price) : null,
     original_price: item.original_price != null ? Math.round(item.original_price) : null,
-    discount_pct:   item.discount_pct,
-    rating:         item.rating,
-    sold_count:     item.sold_count,
-    is_mall:        item.is_mall,
-    location:       item.location,
-    image_url:      item.image_url,
-    url:            item.url,
+    discount_pct: item.discount_pct, rating: item.rating, sold_count: item.sold_count,
+    is_mall: item.is_mall, location: item.location, image_url: item.image_url, url: item.url,
   }));
-
-  // 補充商家名稱：收集不重複的 shop_id 批次查蝦皮 API
   const shopIds = [...new Set(items.map(i => i.shop_id).filter(Boolean))];
   const shopMap = {};
   for (const sid of shopIds) {
@@ -112,7 +91,6 @@ async function fetchShopee(keyword, maxProducts = 30) {
     if (info) shopMap[sid] = info;
     await new Promise(r => setTimeout(r, 200));
   }
-
   return items.map(item => ({
     ...item,
     shop_name: shopMap[item.shop_id]?.name ?? item.shop_name,
@@ -120,35 +98,15 @@ async function fetchShopee(keyword, maxProducts = 30) {
   }));
 }
 
-// ── 執行單一關鍵字並存結果，回傳是否成功 ──
+// ── 執行單一關鍵字 ──
 async function runKeyword(kw) {
   const db = getDB();
   try {
     const items = await fetchShopee(kw.keyword, kw.max_products);
     const resultId = uuidv4();
-    db.prepare(`
-      INSERT INTO shopee_results (id, keyword_id, item_count, items)
-      VALUES (?, ?, ?, ?)
-    `).run(resultId, kw.id, items.length, JSON.stringify(items));
-
-    db.prepare(`
-      UPDATE shopee_keywords
-      SET last_run_at = datetime('now','localtime'), item_count = ?
-      WHERE id = ?
-    `).run(items.length, kw.id);
-
-    // 只保留最近 10 筆結果
-    db.prepare(`
-      DELETE FROM shopee_results
-      WHERE keyword_id = ?
-        AND id NOT IN (
-          SELECT id FROM shopee_results
-          WHERE keyword_id = ?
-          ORDER BY run_at DESC
-          LIMIT 10
-        )
-    `).run(kw.id, kw.id);
-
+    db.prepare('INSERT INTO shopee_results (id, keyword_id, item_count, items) VALUES (?, ?, ?, ?)').run(resultId, kw.id, items.length, JSON.stringify(items));
+    db.prepare("UPDATE shopee_keywords SET last_run_at = datetime('now','localtime'), item_count = ? WHERE id = ?").run(items.length, kw.id);
+    db.prepare('DELETE FROM shopee_results WHERE keyword_id = ? AND id NOT IN (SELECT id FROM shopee_results WHERE keyword_id = ? ORDER BY run_at DESC LIMIT 10)').run(kw.id, kw.id);
     console.log(`[蝦皮追蹤] "${kw.keyword}" 完成，${items.length} 筆`);
     return { ok: true, count: items.length };
   } catch (err) {
@@ -157,127 +115,94 @@ async function runKeyword(kw) {
   }
 }
 
-// ── 排程批次執行所有啟用關鍵字 ──
-async function runAll() {
+// ── 排程批次執行（per-user）──
+async function runAll(userId) {
   const db = getDB();
-  const keywords = db.prepare('SELECT * FROM shopee_keywords WHERE enabled = 1').all();
-  console.log(`[蝦皮排程] 開始執行，共 ${keywords.length} 個關鍵字`);
-  for (const kw of keywords) {
-    await runKeyword(kw);
-  }
+  const keywords = db.prepare('SELECT * FROM shopee_keywords WHERE enabled = 1 AND user_id = ?').all(userId);
+  console.log(`[蝦皮排程:${userId.slice(0,8)}] 共 ${keywords.length} 個關鍵字`);
+  for (const kw of keywords) await runKeyword(kw);
 }
 
 // ═══════════════════════════════════════════════════
 // API 路由
 // ═══════════════════════════════════════════════════
 
-// ── GET /api/shopee-keywords/schedule ── 取得排程設定
-router.get('/schedule', (req, res) => {
-  res.json(loadSchedule());
-});
+// GET /api/shopee-keywords/schedule
+router.get('/schedule', (req, res) => res.json(loadSchedule(req.user.sub)));
 
-// ── PUT /api/shopee-keywords/schedule ── 更新排程設定
+// PUT /api/shopee-keywords/schedule
 router.put('/schedule', (req, res) => {
   const { enabled, time } = req.body;
-  if (!time || !/^\d{2}:\d{2}$/.test(time)) {
-    return res.status(400).json({ error: '時間格式錯誤，請用 HH:MM' });
-  }
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ error: '時間格式錯誤，請用 HH:MM' });
   const s = { enabled: !!enabled, time };
-  saveSchedule(s);
-  applySchedule(s);
+  saveSchedule(s, req.user.sub);
+  applySchedule(s, req.user.sub);
   res.json({ ok: true, ...s });
 });
 
-// ── GET /api/shopee-keywords ── 取得所有追蹤關鍵字
+// GET /api/shopee-keywords
 router.get('/', (req, res) => {
-  const db = getDB();
-  const rows = db.prepare('SELECT * FROM shopee_keywords ORDER BY created_at DESC').all();
+  const rows = getDB().prepare('SELECT * FROM shopee_keywords WHERE user_id = ? ORDER BY created_at DESC').all(req.user.sub);
   res.json(rows);
 });
 
-// ── POST /api/shopee-keywords ── 新增關鍵字（可附帶初始結果一起存入）
+// POST /api/shopee-keywords
 router.post('/', (req, res) => {
   const { keyword, max_products = 30, initial_items } = req.body;
   if (!keyword?.trim()) return res.status(400).json({ error: '請提供關鍵字' });
-
   const db = getDB();
-  const existing = db.prepare('SELECT id FROM shopee_keywords WHERE keyword = ?').get(keyword.trim());
+  const uid = req.user.sub;
+  const existing = db.prepare('SELECT id FROM shopee_keywords WHERE keyword = ? AND user_id = ?').get(keyword.trim(), uid);
   if (existing) return res.status(409).json({ error: '此關鍵字已在追蹤清單中' });
-
   const id = uuidv4();
-
   db.transaction(() => {
     const items = Array.isArray(initial_items) ? initial_items : [];
     const count = items.length;
-
     db.prepare(`
-      INSERT INTO shopee_keywords (id, keyword, max_products, last_run_at, item_count)
-      VALUES (?, ?, ?, ${count > 0 ? "datetime('now','localtime')" : 'NULL'}, ?)
-    `).run(id, keyword.trim(), Number(max_products), count);
-
+      INSERT INTO shopee_keywords (id, user_id, keyword, max_products, last_run_at, item_count)
+      VALUES (?, ?, ?, ?, ${count > 0 ? "datetime('now','localtime')" : 'NULL'}, ?)
+    `).run(id, uid, keyword.trim(), Number(max_products), count);
     if (count > 0) {
-      db.prepare(`
-        INSERT INTO shopee_results (id, keyword_id, item_count, items)
-        VALUES (?, ?, ?, ?)
-      `).run(uuidv4(), id, count, JSON.stringify(items));
+      db.prepare('INSERT INTO shopee_results (id, keyword_id, item_count, items) VALUES (?, ?, ?, ?)').run(uuidv4(), id, count, JSON.stringify(items));
     }
   })();
-
   res.json({ ok: true, id });
 });
 
-// ── DELETE /api/shopee-keywords/:id ── 刪除關鍵字
+// DELETE /api/shopee-keywords/:id
 router.delete('/:id', (req, res) => {
-  const db = getDB();
-  db.prepare('DELETE FROM shopee_keywords WHERE id = ?').run(req.params.id);
+  getDB().prepare('DELETE FROM shopee_keywords WHERE id = ? AND user_id = ?').run(req.params.id, req.user.sub);
   res.json({ ok: true });
 });
 
-// ── PATCH /api/shopee-keywords/:id ── 更新關鍵字設定（enabled / max_products）
+// PATCH /api/shopee-keywords/:id
 router.patch('/:id', (req, res) => {
   const { enabled, max_products } = req.body;
   const db = getDB();
-  if (enabled !== undefined) {
-    db.prepare('UPDATE shopee_keywords SET enabled = ? WHERE id = ?').run(enabled ? 1 : 0, req.params.id);
-  }
+  const uid = req.user.sub;
+  if (enabled !== undefined) db.prepare('UPDATE shopee_keywords SET enabled = ? WHERE id = ? AND user_id = ?').run(enabled ? 1 : 0, req.params.id, uid);
   if (max_products !== undefined) {
     const n = Math.max(1, Math.min(100, Number(max_products) || 30));
-    db.prepare('UPDATE shopee_keywords SET max_products = ? WHERE id = ?').run(n, req.params.id);
+    db.prepare('UPDATE shopee_keywords SET max_products = ? WHERE id = ? AND user_id = ?').run(n, req.params.id, uid);
   }
   res.json({ ok: true });
 });
 
-// ── POST /api/shopee-keywords/:id/run ── 手動立即執行（等待結果回傳）
+// POST /api/shopee-keywords/:id/run
 router.post('/:id/run', async (req, res) => {
-  const db = getDB();
-  const kw = db.prepare('SELECT * FROM shopee_keywords WHERE id = ?').get(req.params.id);
+  const kw = getDB().prepare('SELECT * FROM shopee_keywords WHERE id = ? AND user_id = ?').get(req.params.id, req.user.sub);
   if (!kw) return res.status(404).json({ error: '找不到此關鍵字' });
-
   const result = await runKeyword(kw);
-  if (result.ok) {
-    res.json({ ok: true, count: result.count });
-  } else {
-    res.status(500).json({ error: result.error });
-  }
+  result.ok ? res.json({ ok: true, count: result.count }) : res.status(500).json({ error: result.error });
 });
 
-// ── GET /api/shopee-keywords/:id/results ── 取得最新一次搜尋結果
+// GET /api/shopee-keywords/:id/results
 router.get('/:id/results', (req, res) => {
-  const db = getDB();
-  const row = db.prepare(`
-    SELECT * FROM shopee_results
-    WHERE keyword_id = ?
-    ORDER BY run_at DESC
-    LIMIT 1
-  `).get(req.params.id);
-
+  const kw = getDB().prepare('SELECT id FROM shopee_keywords WHERE id = ? AND user_id = ?').get(req.params.id, req.user.sub);
+  if (!kw) return res.status(404).json({ error: '找不到此關鍵字' });
+  const row = getDB().prepare('SELECT * FROM shopee_results WHERE keyword_id = ? ORDER BY run_at DESC LIMIT 1').get(req.params.id);
   if (!row) return res.json({ items: [], run_at: null });
-
-  res.json({
-    run_at:     row.run_at,
-    item_count: row.item_count,
-    items:      JSON.parse(row.items || '[]'),
-  });
+  res.json({ run_at: row.run_at, item_count: row.item_count, items: JSON.parse(row.items || '[]') });
 });
 
 module.exports = router;

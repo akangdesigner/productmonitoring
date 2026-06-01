@@ -3,11 +3,19 @@ const router = express.Router();
 const { getDB } = require('../db');
 const LineService = require('../services/LineService');
 
+function getSettings(db, googleSub) {
+  let s = db.prepare('SELECT * FROM line_settings WHERE google_sub = ?').get(googleSub);
+  if (!s) {
+    db.prepare('INSERT OR IGNORE INTO line_settings (google_sub) VALUES (?)').run(googleSub);
+    s = db.prepare('SELECT * FROM line_settings WHERE google_sub = ?').get(googleSub);
+  }
+  return s;
+}
+
 // GET /api/line/settings
 router.get('/settings', (req, res) => {
   const db = getDB();
-  const s = db.prepare('SELECT * FROM line_settings WHERE id = 1').get();
-  // 隱藏敏感 token，只回傳是否已設定
+  const s = getSettings(db, req.user.sub);
   res.json({
     ...s,
     channel_access_token: s.channel_access_token ? '••••••••' : '',
@@ -20,14 +28,14 @@ router.get('/settings', (req, res) => {
 // PUT /api/line/settings
 router.put('/settings', (req, res) => {
   const db = getDB();
+  const googleSub = req.user.sub;
+  const current = getSettings(db, googleSub);
   const {
     channel_access_token, channel_secret, user_id,
     notify_price_drop, notify_gift_change,
     price_drop_threshold, daily_report_enabled, daily_report_time,
   } = req.body;
 
-  // 只更新有傳入的欄位（token 前綴 •• 表示未變更）
-  const current = db.prepare('SELECT * FROM line_settings WHERE id = 1').get();
   db.prepare(`
     UPDATE line_settings SET
       channel_access_token  = ?,
@@ -39,7 +47,7 @@ router.put('/settings', (req, res) => {
       daily_report_enabled  = ?,
       daily_report_time     = ?,
       updated_at            = datetime('now','localtime')
-    WHERE id = 1
+    WHERE google_sub = ?
   `).run(
     channel_access_token?.startsWith('••') ? current.channel_access_token : (channel_access_token || ''),
     channel_secret?.startsWith('••')       ? current.channel_secret       : (channel_secret || ''),
@@ -49,8 +57,8 @@ router.put('/settings', (req, res) => {
     price_drop_threshold  ?? current.price_drop_threshold,
     daily_report_enabled  ?? current.daily_report_enabled,
     daily_report_time     ?? current.daily_report_time,
+    googleSub,
   );
-
   res.json({ ok: true });
 });
 
@@ -58,16 +66,13 @@ router.put('/settings', (req, res) => {
 router.post('/test', async (req, res) => {
   try {
     const db = getDB();
-    const s = db.prepare('SELECT channel_access_token, user_id FROM line_settings WHERE id = 1').get();
+    const s = getSettings(db, req.user.sub);
     const { token: bodyToken, userId: bodyUserId } = req.body;
 
-    // 優先用 env，再用 body（若非遮罩值），最後才用 DB
     const token  = process.env.LINE_CHANNEL_ACCESS_TOKEN
       || (!bodyToken?.startsWith('••') ? bodyToken : null)
       || s?.channel_access_token || '';
-    const userId = process.env.LINE_USER_ID
-      || bodyUserId
-      || s?.user_id || '';
+    const userId = process.env.LINE_USER_ID || bodyUserId || s?.user_id || '';
 
     if (!token)  return res.status(400).json({ error: '尚未設定 LINE Channel Access Token' });
     if (!userId) return res.status(400).json({ error: '尚未設定推播目標 User ID' });
@@ -81,16 +86,18 @@ router.post('/test', async (req, res) => {
   }
 });
 
-// POST /api/line/report/gaps — 手動發送價差報告
+// POST /api/line/report/gaps
 router.post('/report/gaps', async (req, res) => {
   try {
-    const db = getDB();
+    const db  = getDB();
+    const uid = req.user.sub;
     const rows = db.prepare(`
       WITH latest AS (
         SELECT pr.product_id, pr.platform, pr.price,
           ROW_NUMBER() OVER (PARTITION BY pr.product_id, pr.platform ORDER BY pr.scraped_at DESC) rn
         FROM price_records pr
-        JOIN products p ON p.id = pr.product_id WHERE p.is_active = 1
+        JOIN products p ON p.id = pr.product_id
+        WHERE p.is_active = 1 AND p.user_id = ?
           AND pr.platform IN ('watsons','cosmed','poya')
       )
       SELECT p.id, p.name, p.brand,
@@ -99,9 +106,9 @@ router.post('/report/gaps', async (req, res) => {
         MAX(CASE WHEN l.platform='poya'    THEN l.price END) AS poya
       FROM products p
       LEFT JOIN latest l ON l.product_id = p.id AND l.rn = 1
-      WHERE p.is_active = 1
+      WHERE p.is_active = 1 AND p.user_id = ?
       GROUP BY p.id
-    `).all();
+    `).all(uid, uid);
 
     const gaps = rows.map(r => {
       const prices = [r.watsons, r.cosmed, r.poya].filter(v => v > 0);
@@ -112,19 +119,16 @@ router.post('/report/gaps', async (req, res) => {
     }).filter(Boolean).sort((a, b) => b.gap - a.gap).slice(0, 10);
 
     if (gaps.length === 0) return res.status(400).json({ error: '目前無跨平台價差資料' });
-
     await LineService.sendGapReport(gaps);
     res.json({ ok: true, count: gaps.length });
   } catch (err) {
-    // @line/bot-sdk v9: HTTPFetchError 用 .body，舊版用 .originalError?.response?.data
     const detail = err.body || err.originalError?.response?.data || err.message;
     res.status(400).json({ error: typeof detail === 'string' ? detail : JSON.stringify(detail) });
   }
 });
 
-// POST /api/line/webhook — LINE Bot Webhook
+// POST /api/line/webhook
 router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  // 簡易 Webhook 接收（可依需求擴充互動功能）
   res.sendStatus(200);
 });
 

@@ -11,7 +11,12 @@ class AlertService {
     const changePercent = ((newPrice - oldPrice) / oldPrice) * 100;
     const db = getDB();
 
-    const settings = db.prepare('SELECT notify_price_drop, price_drop_threshold FROM line_settings WHERE id = 1').get();
+    // 以商品的 user_id 找到對應使用者的 LINE 設定
+    const productRow = db.prepare('SELECT user_id FROM products WHERE id = ?').get(product.id);
+    const googleSub  = productRow?.user_id || '';
+    const settings   = googleSub
+      ? db.prepare('SELECT notify_price_drop, price_drop_threshold FROM line_settings WHERE google_sub = ?').get(googleSub)
+      : null;
     const threshold = settings?.price_drop_threshold ?? 5;
 
     const type    = newPrice < oldPrice ? 'price_drop' : 'price_surge';
@@ -36,6 +41,7 @@ class AlertService {
         platform,
         oldPrice,
         newPrice,
+        googleSub,
       }).catch(err => logger.warn(`LINE 推播失敗: ${err.message}`));
       db.prepare('UPDATE alerts SET line_sent = 1 WHERE id = ?').run(alertId);
     }
@@ -59,12 +65,14 @@ class AlertService {
 
     logger.info(`[警示] 建立: ${title}`);
 
+    const pRow = db.prepare('SELECT user_id FROM products WHERE id = ?').get(product.id);
     await LineService.sendGiftAlert({
       productName: product.name,
       brand:       product.brand || '',
       platform,
       giftDescription: newGift || oldGift,
       isAdded: type === 'gift_added',
+      googleSub: pRow?.user_id || '',
     }).catch(err => logger.warn(`LINE 推播失敗: ${err.message}`));
   }
 

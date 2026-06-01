@@ -1,8 +1,14 @@
 // Vite proxy 會把 /api 轉發到 localhost:3000，不需要寫 API_BASE
 export async function apiFetch(path, options = {}) {
+  const token = localStorage.getItem('auth_token')
+  const { headers: extraHeaders, ...restOptions } = options
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...extraHeaders,
+    },
+    ...restOptions,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));

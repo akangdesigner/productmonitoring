@@ -22,6 +22,7 @@ async function initDB() {
     -- 商品主表
     CREATE TABLE IF NOT EXISTS products (
       id          TEXT PRIMARY KEY,
+      user_id     TEXT NOT NULL DEFAULT '',
       name        TEXT NOT NULL,
       brand       TEXT,
       category    TEXT DEFAULT 'skincare',
@@ -93,9 +94,9 @@ async function initDB() {
       finished_at      TEXT
     );
 
-    -- LINE 通知設定（永遠只有 id=1 這一筆）
+    -- LINE 通知設定（每位使用者獨立一筆，以 google_sub 識別）
     CREATE TABLE IF NOT EXISTS line_settings (
-      id                    INTEGER PRIMARY KEY DEFAULT 1,
+      google_sub            TEXT PRIMARY KEY,
       channel_access_token  TEXT DEFAULT '',
       channel_secret        TEXT DEFAULT '',
       user_id               TEXT DEFAULT '',
@@ -106,10 +107,12 @@ async function initDB() {
       daily_report_time     TEXT DEFAULT '09:00',
       updated_at            TEXT DEFAULT (datetime('now','localtime'))
     );
-
-    -- 確保 line_settings 有一筆預設資料
-    INSERT OR IGNORE INTO line_settings (id) VALUES (1);
   `);
+
+  // ── 遷移：加入 user_id 欄位（Zeabur 既有 DB 用）──
+  try { db.exec("ALTER TABLE products ADD COLUMN user_id TEXT NOT NULL DEFAULT ''") } catch {}
+  try { db.exec("ALTER TABLE client_products ADD COLUMN user_id TEXT NOT NULL DEFAULT ''") } catch {}
+  try { db.exec("ALTER TABLE shopee_keywords ADD COLUMN user_id TEXT NOT NULL DEFAULT ''") } catch {}
 
   // ── 遷移：移除 momo、加入 poya（product_urls 的 CHECK 需重建表） ──
   try {
@@ -165,6 +168,7 @@ async function initDB() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS client_products (
       id         TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL DEFAULT '',
       name       TEXT NOT NULL,
       brand      TEXT,
       category   TEXT DEFAULT 'skincare',
@@ -181,7 +185,8 @@ async function initDB() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS shopee_keywords (
       id            TEXT PRIMARY KEY,
-      keyword       TEXT NOT NULL UNIQUE,
+      user_id       TEXT NOT NULL DEFAULT '',
+      keyword       TEXT NOT NULL,
       max_products  INTEGER DEFAULT 30,
       enabled       INTEGER DEFAULT 1,
       schedule_type TEXT DEFAULT 'daily',

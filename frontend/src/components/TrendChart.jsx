@@ -36,7 +36,7 @@ const DAYS_OPTIONS = [
 ]
 
 function typeOf(p) {
-  const n = (p.base_name || p.name || '').replace(UNIT_RE, '').trim()
+  const n = (p.base_name || p.name || '').replace(UNIT_RE, '').replace(/粧/g, '妝').trim()
   for (const t of TYPE_KEYWORDS) {
     if (n.includes(t)) return t
   }

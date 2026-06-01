@@ -13,7 +13,11 @@ app.use(morgan('dev'));
 // ── 前端靜態檔案 ──
 app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
 
+const authMiddleware = require('./middleware/authMiddleware');
+
 // ── API 路由 ──
+app.use('/api/auth',      require('./routes/auth'));           // 公開（無需登入）
+app.use('/api',           authMiddleware);                     // 以下所有路由需登入
 app.use('/api/products',  require('./routes/products'));
 app.use('/api/prices',    require('./routes/prices'));
 app.use('/api/gifts',     require('./routes/gifts'));

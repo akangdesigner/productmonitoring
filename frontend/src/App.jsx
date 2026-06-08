@@ -24,7 +24,8 @@ function getStoredUser() {
   const token = localStorage.getItem('auth_token')
   if (!token) return null
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(b64))
     if (payload.exp * 1000 < Date.now()) {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('auth_user')

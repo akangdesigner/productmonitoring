@@ -122,16 +122,14 @@ export default function ScraperPage({ isOnline, toast }) {
   const loadAll = useCallback(async () => {
     if (!isOnline) return
     try {
-      const [urls, sched, hist, status, shopee, kwData, kwSched] = await Promise.all([
+      const [urls, sched, hist, status, kwData, kwSched] = await Promise.all([
           api.getScraperUrls(),
           api.getSchedule(),
           api.getScraperHistory(10),
           api.getScraperStatus(),
-          api.getShopeeAuthStatus(),
           api.getShopeeKeywords(),
           api.getShopeeKeywordSchedule(),
         ])
-      if (shopee)  setShopeeStatus(shopee)
       if (urls)    setUrlList(urls)
       if (sched)   setSchedule({ enabled: sched.enabled, time: sched.time, days: sched.days })
       if (hist)    setHistory(hist)

@@ -64,6 +64,7 @@ export default function LoginPage({ onLogin }) {
       window.google.accounts.id.initialize({
         client_id: CLIENT_ID,
         callback: (r) => callbackRef.current(r),
+        auto_select: true,
       })
       setGisReady(true)
     }
@@ -85,6 +86,7 @@ export default function LoginPage({ onLogin }) {
         shape: 'pill',
         width: 260,
       })
+      window.google.accounts.id.prompt()
     }
   }, [gisReady])
 

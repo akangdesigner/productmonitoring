@@ -8,19 +8,14 @@ export default function ShopeeTrackingPage({ isOnline, toast }) {
   const [kwResultsId,      setKwResultsId]      = useState(null)
   const [kwResultsLoading, setKwResultsLoading] = useState(false)
   const [kwRunning,        setKwRunning]        = useState({})
-  const [kwSchedule,       setKwSchedule]       = useState({ enabled: true, time: '02:00' })
-  const [kwSchedSaving,    setKwSchedSaving]    = useState(false)
   const [kwNewInput,       setKwNewInput]       = useState('')
   const [kwSort,           setKwSort]           = useState('created_desc')
   const [kwResultsSort,    setKwResultsSort]    = useState('default')
 
   useEffect(() => {
     if (!isOnline) return
-    Promise.all([api.getShopeeKeywords(), api.getShopeeKeywordSchedule()])
-      .then(([kwData, kwSched]) => {
-        if (kwData)  setKwList(kwData)
-        if (kwSched) setKwSchedule(kwSched)
-      })
+    api.getShopeeKeywords()
+      .then(kwData => { if (kwData) setKwList(kwData) })
       .catch(() => {})
   }, [isOnline])
 
@@ -90,55 +85,8 @@ export default function ShopeeTrackingPage({ isOnline, toast }) {
             蝦皮關鍵字追蹤
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '6px 0 0', fontFamily: 'Noto Sans TC, sans-serif' }}>
-            新增關鍵字，每日自動抓取蝦皮搜尋結果，掌握競品動態
+            新增關鍵字，手動執行抓取蝦皮搜尋結果，掌握競品動態
           </p>
-        </div>
-
-        {/* 排程控制 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={!!kwSchedule.enabled}
-              onChange={e => setKwSchedule(prev => ({ ...prev, enabled: e.target.checked }))}
-              style={{ accentColor: '#fb923c', width: 14, height: 14 }}
-            />
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'Noto Sans TC, sans-serif' }}>自動排程</span>
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>每天</span>
-            <input
-              type="time"
-              value={kwSchedule.time}
-              onChange={e => setKwSchedule(prev => ({ ...prev, time: e.target.value }))}
-              disabled={!kwSchedule.enabled}
-              style={{
-                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 6, padding: '4px 8px', color: 'var(--text-primary)',
-                fontSize: 13, fontFamily: 'DM Mono, monospace', outline: 'none',
-                opacity: kwSchedule.enabled ? 1 : 0.4,
-              }}
-            />
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>執行</span>
-          </div>
-          <button
-            className="btn btn-ghost"
-            style={{ fontSize: 12, padding: '4px 14px' }}
-            disabled={kwSchedSaving}
-            onClick={async () => {
-              setKwSchedSaving(true)
-              try {
-                await api.setShopeeKeywordSchedule(kwSchedule)
-                toast(`排程已更新：${kwSchedule.enabled ? `每天 ${kwSchedule.time}` : '已停用'}`, 'success')
-              } catch (err) {
-                toast(err.message, 'error')
-              } finally {
-                setKwSchedSaving(false)
-              }
-            }}
-          >
-            {kwSchedSaving ? '儲存中…' : '儲存排程'}
-          </button>
         </div>
       </div>
 
@@ -154,7 +102,7 @@ export default function ShopeeTrackingPage({ isOnline, toast }) {
               <input
                 className="input-styled"
                 style={{ flex: 1, fontSize: 12, padding: '6px 10px' }}
-                placeholder="新增追蹤關鍵字…"
+                placeholder="品牌名 + 產品名，例：資生堂精華液"
                 value={kwNewInput ?? ''}
                 onChange={e => setKwNewInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !kwAddLoading && kwNewInput?.trim() && handleKwDirectAdd()}
@@ -168,6 +116,9 @@ export default function ShopeeTrackingPage({ isOnline, toast }) {
               >
                 {kwAddLoading ? '…' : '+'}
               </button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, padding: '2px 2px' }}>
+              💡 建議輸入「品牌 + 品類」，如「蘭蔻精華」、「SKII 神仙水」，可更精準定位競品
             </div>
 
             {/* 排序 */}
@@ -213,18 +164,8 @@ export default function ShopeeTrackingPage({ isOnline, toast }) {
                       onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(249,115,22,0.3)' }}
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
                     >
-                      {/* 上排：啟用 + 名稱 + 操作按鈕 */}
+                      {/* 上排：名稱 + 操作按鈕 */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <input
-                          type="checkbox"
-                          checked={!!kw.enabled}
-                          onClick={e => e.stopPropagation()}
-                          onChange={async e => {
-                            await api.toggleShopeeKeyword(kw.id, e.target.checked)
-                            setKwList(prev => prev.map(k => k.id === kw.id ? { ...k, enabled: e.target.checked ? 1 : 0 } : k))
-                          }}
-                          style={{ accentColor: '#fb923c', width: 13, height: 13, cursor: 'pointer', flexShrink: 0 }}
-                        />
                         <span style={{
                           flex: 1, fontSize: 13, fontWeight: isActive ? 600 : 500,
                           color: isActive ? '#fb923c' : 'var(--text-primary)',
@@ -291,7 +232,7 @@ export default function ShopeeTrackingPage({ isOnline, toast }) {
                       </div>
 
                       {/* 下排：筆數 + 上次執行 + 抓取筆數設定 */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 5, paddingLeft: 19 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 }}>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                           {kw.last_run_at
                             ? `${kw.item_count ?? 0} 筆 · ${kw.last_run_at.slice(0, 10)}`

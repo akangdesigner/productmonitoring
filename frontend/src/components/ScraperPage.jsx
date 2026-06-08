@@ -96,10 +96,6 @@ export default function ScraperPage({ isOnline, toast }) {
   const [history,     setHistory]     = useState([])
   const [histLoading, setHistLoading] = useState(false)
 
-  // ── 蝦皮授權 ──
-  const [shopeeStatus,  setShopeeStatus]  = useState(null)
-  const [shopeeLoading, setShopeeLoading] = useState(false)
-
   // ── Apify 蝦皮關鍵字搜尋 ──
   const [apifyKeyword,    setApifyKeyword]    = useState('')
   const [apifyMax,        setApifyMax]        = useState(20)
@@ -316,22 +312,6 @@ export default function ScraperPage({ isOnline, toast }) {
       toast(`儲存失敗：${err.message}`, 'error')
     }
     setSchedSaving(false)
-  }
-
-  // ── 蝦皮授權 handler ──
-  async function handleShopeeImport() {
-    if (!isOnline) { toast('後端離線', 'error'); return }
-    setShopeeLoading(true)
-    try {
-      const res = await api.importShopeeAuth()
-      toast(res.message, 'success')
-      const status = await api.getShopeeAuthStatus()
-      setShopeeStatus(status)
-    } catch (err) {
-      toast(err.message, 'error')
-    } finally {
-      setShopeeLoading(false)
-    }
   }
 
   // ── 追蹤清單直接新增關鍵字（不爬，之後排程或手動執行才抓） ──
@@ -724,44 +704,7 @@ export default function ScraperPage({ isOnline, toast }) {
       </div>
 
       {/* ══════════════════════════════════════════════
-          三、蝦皮帳號授權
-      ══════════════════════════════════════════════ */}
-      <div className="card" style={{ padding: '20px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <div className="section-title" style={{ margin: 0 }}>蝦皮帳號授權</div>
-          {shopeeStatus?.connected ? (
-            <span style={{ fontSize: 11, background: 'rgba(74,222,128,0.15)', color: '#4ade80', borderRadius: 6, padding: '2px 8px' }}>
-              已連線
-            </span>
-          ) : (
-            <span style={{ fontSize: 11, background: 'rgba(248,113,113,0.15)', color: '#f87171', borderRadius: 6, padding: '2px 8px' }}>
-              未授權
-            </span>
-          )}
-        </div>
-
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.8 }}>
-          請先用 Chrome 開啟過 <strong style={{ color: 'var(--text-primary)' }}>shopee.tw</strong> 一次，再點下方按鈕即可完成設定。
-        </div>
-
-        {shopeeStatus?.connected && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-            上次讀取：{shopeeStatus.savedAt?.slice(0, 10)}
-            {shopeeStatus.daysSince !== null && `（${shopeeStatus.daysSince} 天前）`}
-          </div>
-        )}
-
-        <button
-          className="btn btn-primary"
-          onClick={handleShopeeImport}
-          disabled={shopeeLoading}
-        >
-          {shopeeLoading ? '讀取中…' : shopeeStatus?.connected ? '重新讀取 Cookie' : '讀取 Chrome Cookie'}
-        </button>
-      </div>
-
-      {/* ══════════════════════════════════════════════
-          四、蝦皮關鍵字搜尋（Apify）
+          三、蝦皮關鍵字搜尋（Apify）
       ══════════════════════════════════════════════ */}
       <div className="card" style={{ padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>

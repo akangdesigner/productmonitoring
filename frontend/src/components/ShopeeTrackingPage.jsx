@@ -118,7 +118,7 @@ export default function ShopeeTrackingPage({ isOnline, toast }) {
               </button>
             </div>
             <div style={{
-              fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
+              fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.6,
               padding: '7px 10px', borderRadius: 8,
               background: 'rgba(249,115,22,0.07)',
               border: '1px solid rgba(249,115,22,0.18)',

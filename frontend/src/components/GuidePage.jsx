@@ -134,6 +134,16 @@ function IconLine() {
     </svg>
   )
 }
+function IconShopee() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="9" r="4" stroke="url(#sh-g)" strokeWidth="1.8" fill="none"/>
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="url(#sh-g)" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+      <path d="M17 4l1.5 1.5M20 7h-2M17 10l1.5 1.5" stroke="url(#sh-g)" strokeWidth="1.4" strokeLinecap="round" opacity="0.6"/>
+      <defs><linearGradient id="sh-g" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse"><stop stopColor="#fb923c"/><stop offset="1" stopColor="#f97316"/></linearGradient></defs>
+    </svg>
+  )
+}
 function IconHelp() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -242,6 +252,7 @@ const SECTIONS = [
         items: [
           { icon: <IconRadar />,  title: '自動爬蟲',     desc: '定時抓取各平台商品價格，不需手動查詢', grad: 'linear-gradient(135deg,rgba(192,132,252,0.2),rgba(155,109,202,0.1))' },
           { icon: <IconChart />,  title: '比價儀表板',   desc: '一眼看出各平台售價高低，找出差異',     grad: 'linear-gradient(135deg,rgba(212,149,106,0.2),rgba(249,115,22,0.1))' },
+          { icon: <IconShopee />, title: '蝦皮追蹤',     desc: '關鍵字追蹤蝦皮商城，每日自動更新競品', grad: 'linear-gradient(135deg,rgba(249,115,22,0.2),rgba(251,146,60,0.1))' },
           { icon: <IconBell />,   title: 'LINE 即時推播', desc: '競品降價超過設定門檻時，自動傳訊給你', grad: 'linear-gradient(135deg,rgba(56,189,248,0.2),rgba(192,132,252,0.1))' },
           { icon: <IconList />,   title: '商品管理',     desc: '建立自家商品目錄，作為比價基準',       grad: 'linear-gradient(135deg,rgba(74,222,128,0.2),rgba(56,189,248,0.1))' },
         ],
@@ -257,7 +268,7 @@ const SECTIONS = [
           { title: '完成初始設定',  desc: '前往「初始設定」頁，選擇 1～3 個要追蹤的平台，貼上分類頁網址，並選填 LINE User ID。' },
           { title: '執行第一次爬蟲', desc: '前往「爬蟲排程」頁，點「立即執行」，系統會馬上抓取各平台商品資料（約需 1～3 分鐘）。' },
           { title: '查看儀表板',    desc: '回到「監控儀表板」，就能看到各平台商品的最新售價與漲跌狀況。' },
-          { title: '設定 LINE 通知', desc: '前往「LINE 通知」頁，填入 Channel Access Token 與 User ID，開啟降價警示開關。' },
+          { title: '開啟降價通知', desc: '若需要接收 LINE 降價通知，確認管理員已完成通知設定後，前往「LINE 通知」頁開啟降價警示開關即可。' },
         ],
       },
     ],
@@ -296,21 +307,54 @@ const SECTIONS = [
   {
     id: 'line', icon: <IconLine />, title: 'LINE 通知設定',
     content: [
-      { type: 'text', value: '系統使用 LINE Messaging API 發送通知，需要準備以下資訊：' },
+      { type: 'text', value: '系統可透過 LINE 在競品降價時即時通知你，讓你第一時間掌握市場動態。通知功能由管理員完成初始設定後，你只需在「LINE 通知」頁開啟開關即可使用。' },
       {
         type: 'table',
         rows: [
-          { label: 'Channel Access Token', desc: '在 LINE Developers 後台建立 Messaging API Channel 後取得' },
-          { label: 'Channel Secret',       desc: '同上，位於 Channel 設定頁的 Basic Settings' },
-          { label: 'User ID（UID）',        desc: '以 LINE 帳號傳訊給 Bot 後，可在 Webhook 收到的事件中取得' },
+          { label: '降價通知', desc: '競品售價下降超過設定門檻（預設 5%）時自動發送 LINE 通知' },
+          { label: '每日早報', desc: '每天早上 8:00 自動彙整前一日所有降價商品，傳送摘要給你' },
+          { label: '價差報告', desc: '可從儀表板手動觸發，一次傳送所有跨平台的比價摘要' },
         ],
       },
       {
         type: 'tips',
         items: [
-          '降價通知：競品售價下降超過設定門檻（預設 5%）時發送',
-          '每日早報：每天早上 8:00 自動彙整前一日所有降價商品',
-          '價差報告：可手動從儀表板觸發，一次傳送所有跨平台價差摘要',
+          '若 LINE 通知尚未啟用，請聯繫管理員確認系統通知設定已完成',
+          '可在「LINE 通知」頁使用「傳送測試訊息」按鈕，確認通知是否正常收到',
+          '降價門檻與每日早報時間可依需求由管理員調整',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'shopee', icon: <IconShopee />, title: '蝦皮關鍵字追蹤',
+    content: [
+      { type: 'text', value: '「蝦皮追蹤」是主要功能區的獨立頁面，透過 Apify 爬取蝦皮商城搜尋結果，支援多關鍵字管理與每日自動排程。' },
+      {
+        type: 'steps',
+        items: [
+          { title: '前往蝦皮追蹤頁', desc: '點擊左側主選單「蝦皮追蹤」，進入關鍵字管理頁面。' },
+          { title: '新增追蹤關鍵字', desc: '在左上角輸入框輸入關鍵字（如「雪Q餅」、「精華液」），按 Enter 或點「+」新增到追蹤清單。' },
+          { title: '執行抓取', desc: '點擊 tag 上的「↻」立即執行；執行完成後右側會自動顯示結果。也可開啟「自動排程」讓系統每天定時更新。' },
+          { title: '查看與切換結果', desc: '點擊左側任一關鍵字 tag，右側即切換顯示該關鍵字的商品卡片清單，支援價格、評分、銷售量、Mall 優先等排序。' },
+        ],
+      },
+      {
+        type: 'table',
+        rows: [
+          { label: '排序方式',   desc: '結果可依「預設 / 價格低→高 / 價格高→低 / 評分 / 銷售量 / Mall 優先」切換' },
+          { label: 'Mall 標籤',  desc: '橘色 Mall 徽章表示蝦皮官方認證商城賣場，品質與出貨較有保障' },
+          { label: '啟用開關',   desc: 'tag 左側的 checkbox 控制該關鍵字是否納入自動排程；停用後僅保留記錄，不影響手動執行' },
+          { label: '資料來源',   desc: '搜尋結果來自蝦皮商城實際搜尋，與你在蝦皮網站上看到的結果一致' },
+        ],
+      },
+      {
+        type: 'tips',
+        items: [
+          '關鍵字建議用「品類詞」（如精華液、防曬乳），而非單一品牌，才能掌握整體市場競品',
+          '自動排程建議設在凌晨 2:00，蝦皮流量低、抓取成功率更高',
+          '若執行後結果筆數為 0，請聯繫管理員確認系統狀態，或嘗試更換其他關鍵字',
+          '點擊商品卡片可直接跳轉至蝦皮商品頁',
         ],
       },
     ],
@@ -322,9 +366,11 @@ const SECTIONS = [
         type: 'faq',
         items: [
           { q: '爬蟲執行後儀表板沒有資料？',  a: '請確認填入的網址是分類頁（如「唇膏」類別頁），而非單一商品頁。執行後等待約 1～2 分鐘，再重新整理頁面。' },
-          { q: 'LINE 通知沒有收到？',         a: '請確認 Channel Access Token 與 User ID 都正確填寫，並已開啟降價通知開關。可在「LINE 通知」頁使用「傳送測試訊息」功能驗證。' },
-          { q: '系統重新部署後資料消失？',     a: '若部署在 Zeabur 或類似雲端服務，需掛載 Persistent Volume 到 /data 路徑，並設定環境變數 DB_PATH=/data/beauty_monitor.sqlite，才能讓資料庫持久保存。' },
+          { q: 'LINE 通知沒有收到？',         a: '請先確認「LINE 通知」頁的降價通知開關已開啟。可使用頁面上的「傳送測試訊息」按鈕測試是否能正常收到。若仍無法收到，請聯繫管理員確認通知設定是否完整。' },
+          { q: '之前的資料找不到了？',         a: '若你的帳號有切換或系統進行過維護，部分歷史資料可能需要重新執行爬蟲才能補回。如資料異常消失，請聯繫管理員協助確認。' },
           { q: '可以同時追蹤多少商品？',       a: '系統沒有硬性限制，但建議每個平台不超過 200 個商品，以確保爬蟲速度與穩定性。' },
+          { q: '蝦皮追蹤執行後顯示 0 筆結果？', a: '可能是關鍵字太冷門、或系統暫時異常。建議先嘗試換一個常見的關鍵字（如「精華液」）重新執行。若仍為 0，請聯繫管理員確認系統狀態。' },
+          { q: '蝦皮可以搜尋幾個關鍵字？',     a: '關鍵字數量無限制，但同時執行多個可能需要較長等待時間。自動排程會依序執行所有已啟用的關鍵字。' },
           { q: '網址填錯了怎麼辦？',           a: '前往「爬蟲排程」頁，可以看到目前所有監控網址的清單，點擊刪除後重新新增正確網址即可。' },
         ],
       },
@@ -470,6 +516,15 @@ function Block({ block }) {
 
 /* ── Main ── */
 export default function GuidePage({ onNav }) {
+  const [branch, setBranch] = useState(null) // null | 'dashboard' | 'shopee'
+
+  const faqItems = SECTIONS.find(s => s.id === 'faq').content[0].items
+  const dashFaqs   = faqItems.filter((_, i) => ![4, 5].includes(i))
+  const shopeeFaqs = faqItems.filter((_, i) => [4, 5].includes(i))
+
+  const dashSections   = SECTIONS.filter(s => ['start', 'dashboard', 'scraper', 'line'].includes(s.id))
+  const shopeeSections = SECTIONS.filter(s => s.id === 'shopee')
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: INJECT_CSS }} />
@@ -477,114 +532,162 @@ export default function GuidePage({ onNav }) {
 
         {/* ── Hero Header ── */}
         <div style={{
-          marginBottom: 40,
+          marginBottom: 36,
           padding: '36px 32px',
           borderRadius: 20,
           background: 'linear-gradient(135deg, rgba(155,109,202,0.1) 0%, rgba(212,149,106,0.07) 50%, rgba(0,0,0,0) 100%)',
           border: '1px solid rgba(155,109,202,0.15)',
           position: 'relative', overflow: 'hidden',
           animation: 'gp-fadeUp 0.5s ease both',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 28,
         }}>
-          {/* decorative orb */}
           <div style={{
             position: 'absolute', top: -60, right: -60,
             width: 240, height: 240, borderRadius: '50%',
             background: 'radial-gradient(circle, rgba(155,109,202,0.12) 0%, transparent 70%)',
             pointerEvents: 'none',
           }}/>
-
-          {/* left: text */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.28em', color: 'var(--amethyst)', textTransform: 'uppercase', marginBottom: 14 }}>
-              使用說明 · GUIDE
-            </div>
-            <h1 style={{
-              fontFamily: "'Cormorant Garamond', serif",
-              fontSize: 48, fontWeight: 300, letterSpacing: '-0.025em', lineHeight: 1.05,
-              background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--rose-light) 50%, var(--amethyst-light) 100%)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              margin: '0 0 14px',
-            }}>
-              第一次使用？
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, margin: 0, maxWidth: 420 }}>
-              這裡有你需要知道的一切——從平台設定到 LINE 通知，一步步帶你上手。
-            </p>
+          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.28em', color: 'var(--amethyst)', textTransform: 'uppercase', marginBottom: 14 }}>
+            使用說明 · GUIDE
           </div>
-
-          {/* right: CTA */}
-          {onNav && (
-            <button
-              onClick={() => onNav('register')}
-              style={{
-                flexShrink: 0, position: 'relative', zIndex: 1,
-                background: 'linear-gradient(135deg, rgba(155,109,202,0.18), rgba(212,149,106,0.12))',
-                border: '1px solid rgba(155,109,202,0.35)',
-                borderRadius: 18, padding: '22px 26px',
-                cursor: 'pointer', textAlign: 'center',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                transition: 'all 0.25s ease',
-                minWidth: 148,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 12px 36px rgba(155,109,202,0.28)'; e.currentTarget.style.borderColor = 'rgba(155,109,202,0.6)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = 'rgba(155,109,202,0.35)' }}
-            >
-              <div style={{
-                width: 52, height: 52, borderRadius: 14,
-                background: 'linear-gradient(135deg, rgba(155,109,202,0.25), rgba(212,149,106,0.18))',
-                border: '1px solid rgba(155,109,202,0.3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="url(#cta-g)" strokeWidth="1.8" fill="none"/>
-                  <path d="M12 14c-5 0-8 2-8 4v1h16v-1c0-2-3-4-8-4z" stroke="url(#cta-g)" strokeWidth="1.8" fill="none"/>
-                  <path d="M17 7l1.5 1.5M17 10h2M19 13l-1.5 1.5" stroke="url(#cta-g)" strokeWidth="1.6" strokeLinecap="round" opacity="0.7"/>
-                  <defs>
-                    <linearGradient id="cta-g" x1="4" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
-                      <stop stopColor="#c084fc"/><stop offset="1" stopColor="#d4956a"/>
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--amethyst-light)', lineHeight: 1.3, fontFamily: "'Noto Sans TC', sans-serif" }}>前往初始設定</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>SETUP →</div>
-            </button>
-          )}
+          <h1 style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 48, fontWeight: 300, letterSpacing: '-0.025em', lineHeight: 1.05,
+            background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--rose-light) 50%, var(--amethyst-light) 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            margin: '0 0 18px',
+          }}>
+            歡迎使用競品監控台
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.8, margin: 0, maxWidth: 520 }}>
+            這是一套電商情報工具，整合了兩大核心功能：<strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>監控儀表板</strong>可自動追蹤屈臣氏、康是美、寶雅等平台的競品售價，並在降價時即時通知；<strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>蝦皮追蹤</strong>則透過關鍵字定期爬取蝦皮商城搜尋結果，掌握蝦皮競品動態。點選下方功能卡片，查看對應的使用說明。
+          </p>
         </div>
 
-        {/* ── TOC ── */}
+        {/* ── 兩大功能分支（可展開說明）── */}
         <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 44,
-          padding: '16px 18px',
-          background: 'rgba(255,255,255,0.025)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: 14,
-          animation: 'gp-fadeUp 0.5s ease both',
-          animationDelay: '80ms',
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16,
+          marginBottom: branch ? 28 : 48,
+          animation: 'gp-fadeUp 0.5s ease both', animationDelay: '60ms',
         }}>
-          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', textTransform: 'uppercase', alignSelf: 'center', marginRight: 4 }}>
-            目錄
-          </span>
-          {SECTIONS.map(sec => (
-            <a key={sec.id} href={`#${sec.id}`} className="gp-toc-pill">
-              <span style={{ display: 'flex', alignItems: 'center' }}>{sec.icon}</span>
-              {sec.title}
-            </a>
-          ))}
+          {/* 監控儀表板 */}
+          <button
+            onClick={() => setBranch(branch === 'dashboard' ? null : 'dashboard')}
+            style={{
+              background: branch === 'dashboard'
+                ? 'linear-gradient(135deg, rgba(155,109,202,0.22), rgba(212,149,106,0.13))'
+                : 'linear-gradient(135deg, rgba(155,109,202,0.10), rgba(212,149,106,0.06))',
+              border: branch === 'dashboard'
+                ? '1px solid rgba(155,109,202,0.55)'
+                : '1px solid rgba(155,109,202,0.22)',
+              boxShadow: branch === 'dashboard' ? '0 8px 32px rgba(155,109,202,0.18)' : 'none',
+              borderRadius: 20, padding: '26px 22px',
+              cursor: 'pointer', textAlign: 'left',
+              display: 'flex', flexDirection: 'column', gap: 12,
+              transition: 'all 0.25s ease', position: 'relative', overflow: 'hidden',
+            }}
+          >
+            <div style={{ position: 'absolute', top: -40, right: -40, width: 140, height: 140, borderRadius: '50%', background: 'radial-gradient(circle, rgba(155,109,202,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ width: 46, height: 46, borderRadius: 13, background: 'linear-gradient(135deg, rgba(155,109,202,0.25), rgba(212,149,106,0.15))', border: '1px solid rgba(155,109,202,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <IconChart />
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                style={{ transition: 'transform 0.3s', transform: branch === 'dashboard' ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>
+                <path d="M6 9l6 6 6-6" stroke="var(--amethyst-light)" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Noto Sans TC', sans-serif", marginBottom: 6 }}>
+                監控儀表板
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, fontFamily: "'Noto Sans TC', sans-serif" }}>
+                自動爬取屈臣氏、康是美、寶雅三大平台競品售價，支援降價 LINE 即時通知與排程設定
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--amethyst-light)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.07em', opacity: 0.8 }}>
+              {branch === 'dashboard' ? '▴ 收起說明' : '▾ 查看說明'}
+            </div>
+          </button>
+
+          {/* 蝦皮追蹤 */}
+          <button
+            onClick={() => setBranch(branch === 'shopee' ? null : 'shopee')}
+            style={{
+              background: branch === 'shopee'
+                ? 'linear-gradient(135deg, rgba(249,115,22,0.18), rgba(251,146,60,0.10))'
+                : 'linear-gradient(135deg, rgba(249,115,22,0.09), rgba(251,146,60,0.04))',
+              border: branch === 'shopee'
+                ? '1px solid rgba(249,115,22,0.52)'
+                : '1px solid rgba(249,115,22,0.20)',
+              boxShadow: branch === 'shopee' ? '0 8px 32px rgba(249,115,22,0.18)' : 'none',
+              borderRadius: 20, padding: '26px 22px',
+              cursor: 'pointer', textAlign: 'left',
+              display: 'flex', flexDirection: 'column', gap: 12,
+              transition: 'all 0.25s ease', position: 'relative', overflow: 'hidden',
+            }}
+          >
+            <div style={{ position: 'absolute', top: -40, right: -40, width: 140, height: 140, borderRadius: '50%', background: 'radial-gradient(circle, rgba(249,115,22,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ width: 46, height: 46, borderRadius: 13, background: 'linear-gradient(135deg, rgba(249,115,22,0.22), rgba(251,146,60,0.12))', border: '1px solid rgba(249,115,22,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <IconShopee />
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                style={{ transition: 'transform 0.3s', transform: branch === 'shopee' ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>
+                <path d="M6 9l6 6 6-6" stroke="#fb923c" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Noto Sans TC', sans-serif", marginBottom: 6 }}>
+                蝦皮追蹤
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, fontFamily: "'Noto Sans TC', sans-serif" }}>
+                透過關鍵字定期爬取蝦皮商城搜尋結果，支援多關鍵字管理與每日自動排程更新
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: '#fb923c', fontFamily: "'DM Mono', monospace", letterSpacing: '0.07em', opacity: 0.8 }}>
+              {branch === 'shopee' ? '▴ 收起說明' : '▾ 查看說明'}
+            </div>
+          </button>
         </div>
 
-        {/* ── Sections ── */}
-        {SECTIONS.map((sec, idx) => (
-          <section key={sec.id} className="gp-section" style={{ animationDelay: `${100 + idx * 60}ms` }}>
-            <SectionHeading icon={sec.icon} title={sec.title} id={sec.id} />
-            {sec.content.map((block, i) => <Block key={i} block={block} />)}
-          </section>
-        ))}
+        {/* ── 展開內容 ── */}
+        {branch === 'dashboard' && (
+          <div style={{ animation: 'gp-fadeUp 0.35s ease both' }}>
+            {dashSections.map((sec, idx) => (
+              <section key={sec.id} className="gp-section" style={{ animationDelay: `${idx * 55}ms` }}>
+                <SectionHeading icon={sec.icon} title={sec.title} id={sec.id} />
+                {sec.content.map((block, i) => <Block key={i} block={block} />)}
+              </section>
+            ))}
+            <section className="gp-section">
+              <SectionHeading icon={<IconHelp />} title="常見問題" id="faq-dashboard" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {dashFaqs.map((item, i) => <FaqItem key={i} q={item.q} a={item.a} delay={i * 50} />)}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {branch === 'shopee' && (
+          <div style={{ animation: 'gp-fadeUp 0.35s ease both' }}>
+            {shopeeSections.map((sec, idx) => (
+              <section key={sec.id} className="gp-section" style={{ animationDelay: `${idx * 55}ms` }}>
+                <SectionHeading icon={sec.icon} title={sec.title} id={sec.id} />
+                {sec.content.map((block, i) => <Block key={i} block={block} />)}
+              </section>
+            ))}
+            <section className="gp-section">
+              <SectionHeading icon={<IconHelp />} title="常見問題" id="faq-shopee" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {shopeeFaqs.map((item, i) => <FaqItem key={i} q={item.q} a={item.a} delay={i * 50} />)}
+              </div>
+            </section>
+          </div>
+        )}
 
         {/* ── Footer note ── */}
         <div style={{
-          marginTop: 16, padding: '18px 22px',
+          marginTop: branch ? 16 : 0, padding: '18px 22px',
           background: 'rgba(255,255,255,0.02)',
           border: '1px solid rgba(255,255,255,0.06)',
           borderRadius: 12,

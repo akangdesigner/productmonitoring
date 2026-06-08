@@ -31,14 +31,10 @@ router.post('/shopee', async (req, res) => {
         country,
         keyword: keyword.trim(),
         maxProducts: Number(maxProducts),
-        mode: 'keyword',
-        sort,
-        fetchDetail: Boolean(fetchDetail),
-        delay: 1,
       },
       {
         params: { token, clean: true, format: 'json', limit: Number(maxProducts) },
-        timeout: 300_000, // 5 分鐘
+        timeout: 300_000,
         headers: { 'Content-Type': 'application/json' },
       }
     );

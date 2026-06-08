@@ -15,7 +15,8 @@ import AddProductModal from './components/AddProductModal'
 import RegisterPage    from './components/RegisterPage'
 import GuidePage       from './components/GuidePage'
 import SearchPage      from './components/SearchPage'
-import LoginPage       from './components/LoginPage'
+import LoginPage          from './components/LoginPage'
+import ShopeeTrackingPage from './components/ShopeeTrackingPage'
 
 const DEFAULT_LOG = []
 
@@ -40,7 +41,7 @@ export default function App() {
   const [user, setUser] = useState(getStoredUser)
 
   const [isOnline,    setIsOnline]    = useState(false)
-  const [activeNav,   setActiveNav]   = useState('dashboard')
+  const [activeNav,   setActiveNav]   = useState('guide')
   const [scraperIdle, setScraperIdle] = useState(true)
   const [products,       setProducts]       = useState([])
   const [alerts,         setAlerts]         = useState([])
@@ -70,7 +71,6 @@ export default function App() {
       ])
       if (kpiData)   setKpi(kpiData)
       setProducts(summary ?? [])
-      if (!summary?.length) setActiveNav(nav => nav === 'dashboard' ? 'register' : nav)
       if (alertData?.length) setAlerts(alertData)
       if (gapRes?.total != null) setGapTotal(gapRes.total)
       if (brands)    setOwnBrands(brands)
@@ -223,6 +223,8 @@ export default function App() {
         <main className="main">
           {activeNav === 'search' ? (
             <SearchPage isOnline={isOnline} toast={toast} />
+          ) : activeNav === 'shopee' ? (
+            <ShopeeTrackingPage isOnline={isOnline} toast={toast} />
           ) : activeNav === 'scraper' ? (
             <ScraperPage isOnline={isOnline} toast={toast} />
           ) : activeNav === 'products' ? (

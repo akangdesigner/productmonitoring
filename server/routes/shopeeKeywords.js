@@ -70,11 +70,18 @@ async function fetchShopInfo(shopId) {
 async function fetchShopee(keyword, maxProducts = 30) {
   const token = process.env.APIFY_TOKEN;
   if (!token) throw new Error('後端尚未設定 APIFY_TOKEN');
-  const response = await axios.post(
-    `${BASE_URL}/acts/${ACTOR_ID}/run-sync-get-dataset-items`,
-    { country: 'tw', keyword: keyword.trim(), maxProducts: Number(maxProducts), mode: 'keyword', sort: 'relevancy', fetchDetail: false, delay: 1 },
-    { params: { token, clean: true, format: 'json', limit: Number(maxProducts) }, timeout: 300_000, headers: { 'Content-Type': 'application/json' } }
-  );
+  let response;
+  try {
+    response = await axios.post(
+      `${BASE_URL}/acts/${ACTOR_ID}/run-sync-get-dataset-items`,
+      { country: 'tw', keyword: keyword.trim(), maxProducts: Number(maxProducts) },
+      { params: { token, clean: true, format: 'json', limit: Number(maxProducts) }, timeout: 300_000, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.error(`[Apify 403 detail] status=${err.response?.status} body=${detail}`);
+    throw new Error(`Apify 錯誤 ${err.response?.status ?? ''}：${detail}`);
+  }
   const raw = Array.isArray(response.data) ? response.data : [];
   const items = raw.map(item => ({
     shop_id: item.shop_id, shop_name: item.shop_name || item.shopName || item.seller_name || item.seller || null,

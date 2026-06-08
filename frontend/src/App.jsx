@@ -237,6 +237,50 @@ export default function App() {
             <RegisterPage isOnline={isOnline} toast={toast} />
           ) : activeNav === 'guide' ? (
             <GuidePage onNav={setActiveNav} />
+          ) : products.length === 0 && isOnline ? (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              minHeight: 420, gap: 20, padding: '48px 24px', textAlign: 'center',
+            }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 18,
+                background: 'linear-gradient(135deg, rgba(155,109,202,0.18), rgba(212,149,106,0.12))',
+                border: '1px solid rgba(155,109,202,0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
+              }}>📋</div>
+              <div>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 26, fontWeight: 400, color: 'var(--text-primary)', marginBottom: 10,
+                }}>
+                  尚無監控資料
+                </div>
+                <div style={{
+                  fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.75, maxWidth: 360,
+                  fontFamily: "'Noto Sans TC', sans-serif",
+                }}>
+                  還沒有設定要追蹤的競品網址。<br />
+                  前往「初始設定」貼上分類頁網址，再執行一次爬蟲，資料就會出現在這裡。
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveNav('register')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 28px', borderRadius: 14, cursor: 'pointer',
+                  background: 'linear-gradient(135deg, rgba(155,109,202,0.22), rgba(212,149,106,0.14))',
+                  border: '1px solid rgba(155,109,202,0.4)',
+                  color: 'var(--amethyst-light)', fontSize: 15, fontWeight: 600,
+                  fontFamily: "'Noto Sans TC', sans-serif",
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(155,109,202,0.35), rgba(212,149,106,0.22))'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(155,109,202,0.25)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(155,109,202,0.22), rgba(212,149,106,0.14))'; e.currentTarget.style.boxShadow = '' }}
+              >
+                前往初始設定
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
           ) : (
             <>
               <KPICards kpi={{ ...kpi, unreadAlerts: newGapCount }} />

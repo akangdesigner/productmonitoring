@@ -117,8 +117,13 @@ export default function ShopeeTrackingPage({ isOnline, toast }) {
                 {kwAddLoading ? '…' : '+'}
               </button>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, padding: '2px 2px' }}>
-              💡 建議輸入「品牌 + 品類」，如「蘭蔻精華」、「SKII 神仙水」，可更精準定位競品
+            <div style={{
+              fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
+              padding: '7px 10px', borderRadius: 8,
+              background: 'rgba(249,115,22,0.07)',
+              border: '1px solid rgba(249,115,22,0.18)',
+            }}>
+              建議輸入「品牌 + 品類」，如「蘭蔻精華」、「SKII 神仙水」，搜尋結果更精準
             </div>
 
             {/* 排序 */}

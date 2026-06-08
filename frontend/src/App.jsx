@@ -41,7 +41,7 @@ export default function App() {
   const { toasts, toast } = useToast()
   const [user, setUser] = useState(getStoredUser)
 
-  const [isOnline,    setIsOnline]    = useState(false)
+  const [isOnline,    setIsOnline]    = useState(null)
   const [activeNav,   setActiveNav]   = useState('guide')
   const [scraperIdle, setScraperIdle] = useState(true)
   const [products,       setProducts]       = useState([])
@@ -197,7 +197,7 @@ export default function App() {
           </button>
         </div>
       )}
-      {!isOnline && (
+      {isOnline === false && (
         <div className="offline-banner">
           ⚠ 無法連線後端伺服器 — 目前顯示示範資料，請執行 npm run dev 啟動後端
         </div>
@@ -205,7 +205,7 @@ export default function App() {
 
       <div className="orb orb-1" /><div className="orb orb-2" /><div className="orb orb-3" />
 
-      <div className="layout" style={!isOnline ? { paddingTop: 36 } : {}}>
+      <div className="layout" style={isOnline === false ? { paddingTop: 36 } : {}}>
         <Sidebar
           activeNav={activeNav}
           onNav={(key) => {
@@ -238,7 +238,7 @@ export default function App() {
             <RegisterPage isOnline={isOnline} toast={toast} />
           ) : activeNav === 'guide' ? (
             <GuidePage onNav={setActiveNav} />
-          ) : products.length === 0 && isOnline ? (
+          ) : products.length === 0 && isOnline === true ? (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               minHeight: 420, gap: 20, padding: '48px 24px', textAlign: 'center',

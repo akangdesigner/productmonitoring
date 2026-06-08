@@ -665,6 +665,28 @@ export default function GuidePage({ onNav }) {
                 {dashFaqs.map((item, i) => <FaqItem key={i} q={item.q} a={item.a} delay={i * 50} />)}
               </div>
             </section>
+            {onNav && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 48 }}>
+                <button
+                  onClick={() => onNav('dashboard')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '13px 26px', borderRadius: 14, cursor: 'pointer',
+                    background: 'linear-gradient(135deg, rgba(155,109,202,0.22), rgba(212,149,106,0.14))',
+                    border: '1px solid rgba(155,109,202,0.4)',
+                    color: 'var(--amethyst-light)', fontSize: 14, fontWeight: 600,
+                    fontFamily: "'Noto Sans TC', sans-serif",
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(155,109,202,0.35), rgba(212,149,106,0.22))'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(155,109,202,0.25)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(155,109,202,0.22), rgba(212,149,106,0.14))'; e.currentTarget.style.boxShadow = '' }}
+                >
+                  <IconChart />
+                  前往監控儀表板
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -682,6 +704,28 @@ export default function GuidePage({ onNav }) {
                 {shopeeFaqs.map((item, i) => <FaqItem key={i} q={item.q} a={item.a} delay={i * 50} />)}
               </div>
             </section>
+            {onNav && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 48 }}>
+                <button
+                  onClick={() => onNav('shopee')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '13px 26px', borderRadius: 14, cursor: 'pointer',
+                    background: 'linear-gradient(135deg, rgba(249,115,22,0.18), rgba(251,146,60,0.10))',
+                    border: '1px solid rgba(249,115,22,0.4)',
+                    color: '#fb923c', fontSize: 14, fontWeight: 600,
+                    fontFamily: "'Noto Sans TC', sans-serif",
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(249,115,22,0.30), rgba(251,146,60,0.18))'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(249,115,22,0.25)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg, rgba(249,115,22,0.18), rgba(251,146,60,0.10))'; e.currentTarget.style.boxShadow = '' }}
+                >
+                  <IconShopee />
+                  前往蝦皮追蹤
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
